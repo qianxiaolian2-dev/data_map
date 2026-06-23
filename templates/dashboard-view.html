@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>看板预览</title>
+  <style>
+    :root { --bg:#eef1f5; --surface:#fff; --surface-soft:#f8fafc; --ink:#111827; --muted:#6b7280; --line:#dbe2ea; --brand:#1a73e8; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Helvetica Neue",sans-serif; font-size:13px; color:var(--ink); background:var(--bg); min-height:100vh; }
+    button { font:inherit; }
+    .page { min-height:100vh; display:grid; grid-template-rows:48px auto minmax(0,1fr); }
+    .topbar { display:flex; align-items:center; justify-content:space-between; gap:12px; background:#111827; color:#fff; padding:0 18px; }
+    .brand { display:flex; align-items:center; gap:8px; font-weight:700; }
+    .dot { width:8px; height:8px; border-radius:999px; background:#1a73e8; }
+    .topbar-actions { display:flex; align-items:center; gap:8px; }
+    .topbar-btn { height:30px; padding:0 12px; border:1px solid rgba(255,255,255,0.14); border-radius:8px; background:rgba(255,255,255,0.08); color:rgba(255,255,255,0.92); cursor:pointer; }
+    .hero { padding:18px 22px 10px; display:grid; gap:8px; }
+    .title { font-size:28px; font-weight:800; }
+    .sub { color:var(--muted); line-height:1.7; }
+    .content { padding:0 22px 22px; }
+    .grid { display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); gap:12px; }
+    .widget { background:#fff; border:1px solid var(--line); border-radius:16px; box-shadow:0 10px 30px rgba(15,23,42,0.05); padding:14px; display:grid; gap:8px; min-height:120px; }
+    .widget .title-sm { font-size:13px; font-weight:700; }
+    .widget .sub-sm { color:var(--muted); font-size:12px; line-height:1.6; }
+    .widget.kpi .value { font-size:30px; font-weight:800; color:var(--brand); }
+    .widget-table { border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+    .widget-row { display:grid; grid-template-columns:1fr 1fr 1fr; }
+    .widget-row span { padding:8px 10px; border-bottom:1px solid var(--line); font-size:12px; }
+    .widget-row.head span { background:var(--surface-soft); color:var(--muted); font-weight:700; }
+    .chart-shell { border:1px solid rgba(148,163,184,0.18); border-radius:14px; background:linear-gradient(180deg,#ffffff 0%, #f8fbff 100%); padding:12px 12px 8px; display:grid; gap:10px; min-height:260px; }
+    .chart-shell.rank { min-height:240px; }
+    .chart-meta { display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; color:var(--muted); font-size:11px; }
+    .chart-svg { width:100%; height:220px; display:block; }
+    .chart-bars { display:grid; gap:8px; }
+    .chart-bar-row { display:grid; grid-template-columns:minmax(72px, 120px) minmax(0,1fr) 64px; gap:10px; align-items:center; }
+    .chart-bar-label,.chart-bar-value { font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .chart-bar-track { height:10px; border-radius:999px; background:rgba(148,163,184,0.16); overflow:hidden; position:relative; }
+    .chart-bar-fill { height:100%; border-radius:999px; background:linear-gradient(90deg,#1a73e8 0%, #3b82f6 100%); }
+    .chart-empty { min-height:220px; display:flex; align-items:center; justify-content:center; border:1px dashed rgba(148,163,184,0.35); border-radius:12px; color:var(--muted); background:rgba(255,255,255,0.75); }
+    .chart-axis-label { fill:#94a3b8; font-size:10px; }
+    .chart-axis-line { stroke:rgba(148,163,184,0.35); stroke-width:1; }
+    .chart-grid-line { stroke:rgba(148,163,184,0.18); stroke-width:1; }
+    .chart-line { fill:none; stroke:#1a73e8; stroke-width:3; stroke-linecap:round; stroke-linejoin:round; }
+    .chart-area { fill:url(#chartAreaFillPreview); opacity:0.22; }
+    .chart-point { fill:#1a73e8; stroke:#fff; stroke-width:2; }
+    .chart-column { fill:url(#chartBarFillPreview); }
+    .empty { padding:18px; border:1px dashed var(--line); border-radius:12px; background:var(--surface-soft); color:var(--muted); text-align:center; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <div class="brand"><span class="dot"></span>看板预览</div>
+      <div class="topbar-actions">
+        <button class="topbar-btn" type="button" id="backDashboardsBtn">返回列表</button>
+        <button class="topbar-btn" type="button" id="editDashboardBtn">编辑</button>
+      </div>
+    </header>
+    <section class="hero">
+      <div class="title" id="dashboardTitle">看板</div>
+      <div class="sub" id="dashboardSub">预览模式直接展示绑定数据集后的真实结果。</div>
+    </section>
+    <main class="content">
+      <div class="grid" id="dashboardGrid"></div>
+    </main>
+  </div>
+  <script>
+    async function fetchJson(url, options = {}) {
+      const resp = await fetch(url, options);
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.error || `请求失败(${resp.status})`);
+      return data;
+    }
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function metricLabel(metric) {
+      if (!metric) return '-';
+      const agg = String(metric.agg || '').toUpperCase();
+      return metric.label || (metric.field ? `${agg}_${metric.field}` : agg || 'COUNT');
+    }
+    function formatChartNumber(value) {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return String(value ?? '-');
+      if (Math.abs(num) >= 100000000) return `${(num / 100000000).toFixed(1)}亿`;
+      if (Math.abs(num) >= 10000) return `${(num / 10000).toFixed(1)}万`;
+      if (Math.abs(num) >= 1000) return num.toLocaleString('zh-CN');
+      return `${Number(num.toFixed(2))}`;
+    }
+    function shortBucketLabel(value) {
+      const text = String(value ?? '');
+      if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+      return text.length > 14 ? text.slice(0, 14) : text;
+    }
+    function renderLineChart(rows) {
+      if (!rows.length) return '<div class="chart-empty">暂无趋势数据</div>';
+      const width = 720;
+      const height = 220;
+      const padding = { top: 16, right: 18, bottom: 28, left: 18 };
+      const values = rows.map((row) => Number(row.metric_value) || 0);
+      const maxValue = Math.max(...values, 1);
+      const minValue = Math.min(...values, 0);
+      const range = Math.max(maxValue - minValue, 1);
+      const stepX = rows.length > 1 ? (width - padding.left - padding.right) / (rows.length - 1) : 0;
+      const points = rows.map((row, index) => {
+        const x = padding.left + stepX * index;
+        const y = height - padding.bottom - ((Number(row.metric_value) || 0) - minValue) / range * (height - padding.top - padding.bottom);
+        return { x, y, row };
+      });
+      const linePath = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(' ');
+      const areaPath = `${linePath} L ${points[points.length - 1].x.toFixed(2)} ${(height - padding.bottom).toFixed(2)} L ${points[0].x.toFixed(2)} ${(height - padding.bottom).toFixed(2)} Z`;
+      const grid = [0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+        const y = padding.top + (height - padding.top - padding.bottom) * ratio;
+        return `<line class="chart-grid-line" x1="${padding.left}" y1="${y.toFixed(2)}" x2="${width - padding.right}" y2="${y.toFixed(2)}"></line>`;
+      }).join('');
+      const labels = points.filter((_, index) => rows.length <= 6 || index === 0 || index === rows.length - 1 || index % Math.ceil(rows.length / 4) === 0).map((point) => `<text class="chart-axis-label" x="${point.x.toFixed(2)}" y="${height - 8}" text-anchor="middle">${escapeHtml(shortBucketLabel(point.row.bucket))}</text>`).join('');
+      const pointsSvg = points.map((point) => `<circle class="chart-point" cx="${point.x.toFixed(2)}" cy="${point.y.toFixed(2)}" r="4"></circle>`).join('');
+      return `
+        <div class="chart-shell">
+          <div class="chart-meta">
+            <span>共 ${rows.length} 个时间点</span>
+            <span>峰值 ${escapeHtml(formatChartNumber(maxValue))}</span>
+          </div>
+          <svg class="chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="趋势图">
+            <defs>
+              <linearGradient id="chartAreaFillPreview" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#1a73e8"></stop>
+                <stop offset="100%" stop-color="#1a73e8" stop-opacity="0"></stop>
+              </linearGradient>
+            </defs>
+            ${grid}
+            <line class="chart-axis-line" x1="${padding.left}" y1="${height - padding.bottom}" x2="${width - padding.right}" y2="${height - padding.bottom}"></line>
+            <path class="chart-area" d="${areaPath}"></path>
+            <path class="chart-line" d="${linePath}"></path>
+            ${pointsSvg}
+            ${labels}
+          </svg>
+        </div>
+      `;
+    }
+    function renderBarChart(rows, rankMode = false) {
+      if (!rows.length) return `<div class="chart-empty">${rankMode ? '暂无排名数据' : '暂无分组数据'}</div>`;
+      const topRows = rows.slice(0, 8);
+      const maxValue = Math.max(...topRows.map((row) => Number(row.metric_value) || 0), 1);
+      return `
+        <div class="chart-shell ${rankMode ? 'rank' : ''}">
+          <div class="chart-meta">
+            <span>共 ${rows.length} 个分组</span>
+            <span>峰值 ${escapeHtml(formatChartNumber(maxValue))}</span>
+          </div>
+          <div class="chart-bars">
+            ${topRows.map((row, index) => {
+              const value = Number(row.metric_value) || 0;
+              const width = Math.max(6, value / maxValue * 100);
+              return `
+                <div class="chart-bar-row">
+                  <div class="chart-bar-label">${escapeHtml(rankMode ? `${index + 1}. ${shortBucketLabel(row.bucket)}` : shortBucketLabel(row.bucket))}</div>
+                  <div class="chart-bar-track"><div class="chart-bar-fill" style="width:${width}%"></div></div>
+                  <div class="chart-bar-value">${escapeHtml(formatChartNumber(value))}</div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    }
+    function widgetTemplate(widget) {
+      const pos = widget.position || {};
+      const colStyle = `grid-column: span ${pos.w || 3}; min-height:${(pos.h || 2) * 56}px;`;
+      if (widget.error) {
+        return `<section class="widget" style="${colStyle}"><div class="title-sm">${escapeHtml(widget.title || widget.id)}</div><div class="sub-sm">${escapeHtml(widget.error)}</div></section>`;
+      }
+      if (widget.type === 'kpi') {
+        return `<section class="widget kpi" style="${colStyle}"><div class="title-sm">${escapeHtml(widget.title || widget.id)}</div><div class="value">${escapeHtml(widget.data?.value == null ? '-' : widget.data.value)}</div><div class="sub-sm">${escapeHtml(metricLabel(widget.data?.metric))}</div></section>`;
+      }
+      if (['line', 'bar', 'rank_bar'].includes(widget.type)) {
+        const rows = widget.data?.rows || [];
+        const emptyText = widget.type === 'line' ? '暂无趋势数据' : '暂无分组数据';
+        const grainText = widget.data?.time_grain && widget.data.time_grain !== 'raw' ? ` · ${widget.data.time_grain}` : '';
+        const limitText = widget.data?.limit ? ` · Top ${widget.data.limit}` : '';
+        const chartHtml = widget.type === 'line'
+          ? renderLineChart(rows)
+          : renderBarChart(rows, widget.type === 'rank_bar');
+        return `<section class="widget" style="${colStyle}"><div class="title-sm">${escapeHtml(widget.title || widget.id)}</div><div class="sub-sm">${escapeHtml((widget.data?.bucket_field || '') + grainText + ' / ' + metricLabel(widget.data?.metric) + limitText)}</div>${rows.length ? chartHtml : `<div class="empty">${emptyText}</div>`}</section>`;
+      }
+      if (widget.type === 'table') {
+        const cols = widget.data?.columns || [];
+        const rows = widget.data?.rows || [];
+        return `<section class="widget" style="${colStyle}"><div class="title-sm">${escapeHtml(widget.title || widget.id)}</div><div class="widget-table">${cols.length ? `<div class="widget-row head">${cols.slice(0,3).map((col)=>`<span>${escapeHtml(col)}</span>`).join('')}</div>${rows.slice(0,8).map((row)=>`<div class="widget-row">${cols.slice(0,3).map((col)=>`<span>${escapeHtml(row[col])}</span>`).join('')}</div>`).join('')}` : '<div class="empty">暂无明细数据</div>'}</div></section>`;
+      }
+      return `<section class="widget" style="${colStyle}"><div class="title-sm">${escapeHtml(widget.title || widget.id)}</div><div class="sub-sm">暂不支持的组件类型</div></section>`;
+    }
+    async function loadDashboard() {
+      const parts = window.location.pathname.split('/').filter(Boolean);
+      const dashboardId = parts[1];
+      const dashboard = await fetchJson(`/api/dashboards/${encodeURIComponent(dashboardId)}`);
+      const preview = await fetchJson(`/api/dashboard-preview/${encodeURIComponent(dashboardId)}`);
+      document.getElementById('dashboardTitle').textContent = dashboard.name || dashboard.id || '看板';
+      document.getElementById('dashboardSub').textContent = `数据集：${dashboard.dataset_id || '-'} · 组件数：${(dashboard.widgets || []).length}`;
+      document.getElementById('dashboardGrid').innerHTML = (preview.widgets || []).map(widgetTemplate).join('') || '<div class="empty">当前还没有组件</div>';
+    }
+    document.getElementById('backDashboardsBtn').addEventListener('click', () => { window.location.href = '/dashboards'; });
+    document.getElementById('editDashboardBtn').addEventListener('click', () => {
+      const parts = window.location.pathname.split('/').filter(Boolean);
+      window.location.href = `/dashboards/${encodeURIComponent(parts[1])}/edit`;
+    });
+    loadDashboard();
+  </script>
+</body>
+</html>

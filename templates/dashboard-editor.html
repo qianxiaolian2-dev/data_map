@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>看板编辑器</title>
+  <style>
+    :root { --bg:#eef1f5; --surface:#fff; --surface-soft:#f8fafc; --ink:#111827; --muted:#6b7280; --line:#dbe2ea; --brand:#1a73e8; --radius:12px; --ok:#0d9488; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Helvetica Neue",sans-serif; font-size:13px; color:var(--ink); background:var(--bg); min-height:100vh; }
+    button,input,select,textarea { font:inherit; }
+    .page { min-height:100vh; display:grid; grid-template-rows:48px minmax(0,1fr); }
+    .topbar { display:flex; align-items:center; justify-content:space-between; gap:12px; background:#111827; color:#fff; padding:0 18px; }
+    .brand { display:flex; align-items:center; gap:8px; font-weight:700; }
+    .dot { width:8px; height:8px; border-radius:999px; background:#1a73e8; }
+    .topbar-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .topbar-btn { height:30px; padding:0 12px; border:1px solid rgba(255,255,255,0.14); border-radius:8px; background:rgba(255,255,255,0.08); color:rgba(255,255,255,0.92); cursor:pointer; }
+    .topbar-btn.primary { background:#1a73e8; border-color:#1a73e8; color:#fff; }
+    .shell { display:grid; grid-template-columns:240px minmax(0,1fr) 360px; gap:1px; background:var(--line); min-height:0; }
+    .panel { background:var(--surface); min-width:0; min-height:0; display:flex; flex-direction:column; }
+    .panel-head { padding:14px 16px 12px; border-bottom:1px solid var(--line); display:grid; gap:8px; }
+    .panel-title { font-size:16px; font-weight:700; }
+    .panel-sub { color:var(--muted); font-size:12px; line-height:1.6; }
+    .panel-body { padding:14px 16px 18px; overflow:auto; min-height:0; }
+    .group { display:grid; gap:8px; }
+    .group + .group { margin-top:14px; }
+    .group h4 { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+    .chip-list { display:flex; gap:8px; flex-wrap:wrap; }
+    .chip { display:inline-flex; align-items:center; padding:6px 10px; border-radius:999px; background:rgba(26,115,232,0.08); border:1px solid rgba(26,115,232,0.14); color:var(--brand); font-size:12px; }
+    .tool-btn { width:100%; text-align:left; border:1px solid var(--line); border-radius:10px; background:#fff; padding:10px 12px; color:var(--ink); cursor:pointer; }
+    .tool-btn:hover { border-color:rgba(26,115,232,0.24); background:rgba(26,115,232,0.04); }
+    .canvas-wrap { padding:18px; overflow:auto; min-height:0; background:linear-gradient(180deg,#f8fafc 0%, #eef2f7 100%); }
+    .canvas-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+    .canvas-title { font-size:22px; font-weight:800; }
+    .canvas-sub { color:var(--muted); font-size:12px; }
+    .canvas-grid { display:grid; grid-template-columns:repeat(12, minmax(0,1fr)); gap:12px; align-content:start; }
+    .widget { background:#fff; border:1px solid var(--line); border-radius:16px; box-shadow:0 10px 30px rgba(15,23,42,0.05); padding:14px; display:grid; gap:8px; min-height:120px; cursor:pointer; }
+    .widget.active { border-color:rgba(26,115,232,0.4); box-shadow:0 12px 32px rgba(26,115,232,0.12); }
+    .widget .title { font-size:13px; font-weight:700; }
+    .widget .sub { color:var(--muted); font-size:12px; line-height:1.6; }
+    .widget.kpi .value { font-size:28px; font-weight:800; color:var(--brand); }
+    .widget.empty { display:flex; align-items:center; justify-content:center; border-style:dashed; background:rgba(255,255,255,0.7); color:var(--muted); }
+    .widget-table { border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+    .widget-row { display:grid; grid-template-columns:1fr 1fr 1fr; }
+    .widget-row span { padding:8px 10px; border-bottom:1px solid var(--line); font-size:12px; }
+    .widget-row.head span { background:var(--surface-soft); color:var(--muted); font-weight:700; }
+    .chart-shell { border:1px solid rgba(148,163,184,0.18); border-radius:14px; background:linear-gradient(180deg,#ffffff 0%, #f8fbff 100%); padding:12px 12px 8px; display:grid; gap:10px; min-height:260px; }
+    .chart-shell.rank { min-height:240px; }
+    .chart-meta { display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; color:var(--muted); font-size:11px; }
+    .chart-svg { width:100%; height:220px; display:block; }
+    .chart-bars { display:grid; gap:8px; }
+    .chart-bar-row { display:grid; grid-template-columns:minmax(72px, 120px) minmax(0,1fr) 64px; gap:10px; align-items:center; }
+    .chart-bar-label,.chart-bar-value { font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .chart-bar-track { height:10px; border-radius:999px; background:rgba(148,163,184,0.16); overflow:hidden; position:relative; }
+    .chart-bar-fill { height:100%; border-radius:999px; background:linear-gradient(90deg,#1a73e8 0%, #3b82f6 100%); }
+    .chart-empty { min-height:220px; display:flex; align-items:center; justify-content:center; border:1px dashed rgba(148,163,184,0.35); border-radius:12px; color:var(--muted); background:rgba(255,255,255,0.75); }
+    .chart-axis-label { fill:#94a3b8; font-size:10px; }
+    .chart-axis-line { stroke:rgba(148,163,184,0.35); stroke-width:1; }
+    .chart-grid-line { stroke:rgba(148,163,184,0.18); stroke-width:1; }
+    .chart-line { fill:none; stroke:#1a73e8; stroke-width:3; stroke-linecap:round; stroke-linejoin:round; }
+    .chart-area { fill:url(#chartAreaFill); opacity:0.22; }
+    .chart-point { fill:#1a73e8; stroke:#fff; stroke-width:2; }
+    .chart-column { fill:url(#chartBarFill); }
+    .field { display:grid; gap:6px; }
+    .field label { font-size:12px; color:var(--muted); }
+    .field input, .field select, .field textarea { width:100%; border:1px solid var(--line); border-radius:10px; background:#fff; padding:10px 12px; }
+    .field textarea { min-height:92px; resize:vertical; }
+    .status { min-height:18px; color:var(--muted); font-size:12px; }
+    .status.ok { color:var(--ok); }
+    .bind-note { padding:10px 12px; border-radius:10px; background:var(--surface-soft); color:var(--muted); line-height:1.6; font-size:12px; }
+    .actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .empty { padding:18px; border:1px dashed var(--line); border-radius:12px; background:var(--surface-soft); color:var(--muted); text-align:center; }
+    @media (max-width: 1200px) { .shell { grid-template-columns:220px minmax(0,1fr); } .panel.props { grid-column:1 / -1; border-top:1px solid var(--line); } }
+    @media (max-width: 860px) { .shell { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <div class="brand"><span class="dot"></span><span id="dashBrandTitle">看板编辑器</span></div>
+      <div class="topbar-actions">
+        <button class="topbar-btn" type="button" id="backDashboardsBtn">返回列表</button>
+        <button class="topbar-btn" type="button" id="openDatasetsBtn">数据集</button>
+        <button class="topbar-btn" type="button" id="previewDashboardBtn">预览</button>
+        <button class="topbar-btn primary" type="button" id="saveDashboardBtn">保存</button>
+      </div>
+    </header>
+    <div class="shell">
+      <aside class="panel">
+        <div class="panel-head">
+          <div class="panel-title">组件库</div>
+          <div class="panel-sub">第一版先支持 KPI、趋势图、明细表三种核心组件，并直接复用数据集里定义好的维度和指标。</div>
+        </div>
+        <div class="panel-body">
+          <div class="group"><h4>指标</h4><button class="tool-btn" type="button" data-add-widget="kpi">新增 KPI 卡</button></div>
+          <div class="group"><h4>趋势</h4><button class="tool-btn" type="button" data-add-widget="line">新增趋势图</button></div>
+          <div class="group"><h4>明细</h4><button class="tool-btn" type="button" data-add-widget="table">新增明细表</button></div>
+        </div>
+      </aside>
+      <main class="panel">
+        <div class="canvas-wrap">
+          <div class="canvas-head">
+            <div>
+              <div class="canvas-title" id="dashboardTitle">看板</div>
+              <div class="canvas-sub" id="dashboardDatasetHint">数据集：-</div>
+            </div>
+            <div class="chip-list" id="dashboardSummary"></div>
+          </div>
+          <div class="canvas-grid" id="dashboardCanvas"></div>
+        </div>
+      </main>
+      <aside class="panel props">
+        <div class="panel-head">
+          <div class="panel-title">属性</div>
+          <div class="panel-sub">先选中一个组件，再给它绑定指标、时间字段或明细字段。看板预览会直接跑真实数据。</div>
+        </div>
+        <div class="panel-body">
+          <div class="field">
+            <label>看板名称</label>
+            <input id="dashboardNameInput" />
+          </div>
+          <div class="field">
+            <label>描述</label>
+            <textarea id="dashboardDescInput"></textarea>
+          </div>
+          <div class="field">
+            <label>数据集</label>
+            <input id="dashboardDatasetInput" disabled />
+          </div>
+          <div class="field">
+            <label>布局模式</label>
+            <select id="dashboardLayoutMode">
+              <option value="overview">经营总览</option>
+              <option value="conversion">销售转化</option>
+              <option value="customer">客户分析</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>当前组件</label>
+            <select id="widgetSelect"></select>
+          </div>
+          <div class="field">
+            <label>组件标题</label>
+            <input id="widgetTitleInput" />
+          </div>
+          <div class="field" id="metricBindingField">
+            <label>绑定指标</label>
+            <select id="widgetMetricSelect"></select>
+          </div>
+          <div class="field" id="timeBindingField">
+            <label>时间字段</label>
+            <select id="widgetTimeFieldSelect"></select>
+          </div>
+          <div class="field" id="seriesTypeField">
+            <label>图表类型</label>
+            <select id="widgetSeriesTypeSelect">
+              <option value="line">折线图</option>
+              <option value="bar">柱状图</option>
+              <option value="rank_bar">排名条形图</option>
+            </select>
+          </div>
+          <div class="field" id="seriesGrainField">
+            <label>时间粒度</label>
+            <select id="widgetTimeGrainSelect">
+              <option value="raw">原始时间</option>
+              <option value="day">按天</option>
+              <option value="week">按周</option>
+              <option value="month">按月</option>
+            </select>
+          </div>
+          <div class="field" id="seriesSortField">
+            <label>排序方式</label>
+            <select id="widgetSortOrderSelect">
+              <option value="asc">字段升序</option>
+              <option value="desc">字段降序</option>
+              <option value="metric_desc">按指标降序</option>
+              <option value="metric_asc">按指标升序</option>
+            </select>
+          </div>
+          <div class="field" id="seriesLimitField">
+            <label>展示点数</label>
+            <input id="widgetLimitInput" type="number" min="1" max="200" placeholder="例如 12" />
+          </div>
+          <div class="field" id="columnBindingField">
+            <label>明细字段</label>
+            <select id="widgetColumnsSelect" multiple size="6"></select>
+          </div>
+          <div class="bind-note" id="widgetBindHint">选中组件后在这里绑定数据集字段。</div>
+          <div class="actions">
+            <button class="topbar-btn" type="button" id="removeWidgetBtn">删除组件</button>
+          </div>
+          <div class="status" id="editorStatus"></div>
+        </div>
+      </aside>
+    </div>
+  </div>
+  <script>
+    const editorState = { dashboard: null, dataset: null, preview: null, activeWidgetId: '' };
+    async function fetchJson(url, options = {}) {
+      const resp = await fetch(url, options);
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.error || `请求失败(${resp.status})`);
+      return data;
+    }
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function metricKey(metric) {
+      const agg = String(metric?.agg || 'sum').trim().toLowerCase() || 'sum';
+      const field = String(metric?.field || '').trim();
+      return field ? `${agg}:${field}` : agg;
+    }
+    function metricLabel(metric) {
+      return metric?.label || metricKey(metric);
+    }
+    function datasetMetrics() { return Array.isArray(editorState.dataset?.metrics) ? editorState.dataset.metrics : []; }
+    function datasetDimensions() { return Array.isArray(editorState.dataset?.dimensions) ? editorState.dataset.dimensions : []; }
+    function datasetColumns() {
+      const dims = datasetDimensions().map((item) => item.field).filter(Boolean);
+      const time = editorState.dataset?.time_field ? [editorState.dataset.time_field] : [];
+      const metricFields = datasetMetrics().map((item) => item.field).filter(Boolean);
+      return Array.from(new Set([...time, ...dims, ...metricFields]));
+    }
+    function findWidgetPreview(widgetId) {
+      return (editorState.preview?.widgets || []).find((item) => item.id === widgetId);
+    }
+    function formatChartNumber(value) {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return String(value ?? '-');
+      if (Math.abs(num) >= 100000000) return `${(num / 100000000).toFixed(1)}亿`;
+      if (Math.abs(num) >= 10000) return `${(num / 10000).toFixed(1)}万`;
+      if (Math.abs(num) >= 1000) return num.toLocaleString('zh-CN');
+      return `${Number(num.toFixed(2))}`;
+    }
+    function shortBucketLabel(value) {
+      const text = String(value ?? '');
+      if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+      return text.length > 14 ? text.slice(0, 14) : text;
+    }
+    function renderLineChart(rows) {
+      if (!rows.length) return '<div class="chart-empty">暂无趋势数据</div>';
+      const width = 720;
+      const height = 220;
+      const padding = { top: 16, right: 18, bottom: 28, left: 18 };
+      const values = rows.map((row) => Number(row.metric_value) || 0);
+      const maxValue = Math.max(...values, 1);
+      const minValue = Math.min(...values, 0);
+      const range = Math.max(maxValue - minValue, 1);
+      const stepX = rows.length > 1 ? (width - padding.left - padding.right) / (rows.length - 1) : 0;
+      const points = rows.map((row, index) => {
+        const x = padding.left + stepX * index;
+        const y = height - padding.bottom - ((Number(row.metric_value) || 0) - minValue) / range * (height - padding.top - padding.bottom);
+        return { x, y, row };
+      });
+      const linePath = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(' ');
+      const areaPath = `${linePath} L ${points[points.length - 1].x.toFixed(2)} ${(height - padding.bottom).toFixed(2)} L ${points[0].x.toFixed(2)} ${(height - padding.bottom).toFixed(2)} Z`;
+      const grid = [0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+        const y = padding.top + (height - padding.top - padding.bottom) * ratio;
+        return `<line class="chart-grid-line" x1="${padding.left}" y1="${y.toFixed(2)}" x2="${width - padding.right}" y2="${y.toFixed(2)}"></line>`;
+      }).join('');
+      const labels = points.filter((_, index) => rows.length <= 6 || index === 0 || index === rows.length - 1 || index % Math.ceil(rows.length / 4) === 0).map((point) => `<text class="chart-axis-label" x="${point.x.toFixed(2)}" y="${height - 8}" text-anchor="middle">${escapeHtml(shortBucketLabel(point.row.bucket))}</text>`).join('');
+      const pointsSvg = points.map((point) => `<circle class="chart-point" cx="${point.x.toFixed(2)}" cy="${point.y.toFixed(2)}" r="4"></circle>`).join('');
+      return `
+        <div class="chart-shell">
+          <div class="chart-meta">
+            <span>共 ${rows.length} 个时间点</span>
+            <span>峰值 ${escapeHtml(formatChartNumber(maxValue))}</span>
+          </div>
+          <svg class="chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="趋势图">
+            <defs>
+              <linearGradient id="chartAreaFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#1a73e8"></stop>
+                <stop offset="100%" stop-color="#1a73e8" stop-opacity="0"></stop>
+              </linearGradient>
+            </defs>
+            ${grid}
+            <line class="chart-axis-line" x1="${padding.left}" y1="${height - padding.bottom}" x2="${width - padding.right}" y2="${height - padding.bottom}"></line>
+            <path class="chart-area" d="${areaPath}"></path>
+            <path class="chart-line" d="${linePath}"></path>
+            ${pointsSvg}
+            ${labels}
+          </svg>
+        </div>
+      `;
+    }
+    function renderBarChart(rows, rankMode = false) {
+      if (!rows.length) return `<div class="chart-empty">${rankMode ? '暂无排名数据' : '暂无分组数据'}</div>`;
+      const topRows = rows.slice(0, 8);
+      const maxValue = Math.max(...topRows.map((row) => Number(row.metric_value) || 0), 1);
+      return `
+        <div class="chart-shell ${rankMode ? 'rank' : ''}">
+          <div class="chart-meta">
+            <span>共 ${rows.length} 个分组</span>
+            <span>峰值 ${escapeHtml(formatChartNumber(maxValue))}</span>
+          </div>
+          <div class="chart-bars">
+            ${topRows.map((row, index) => {
+              const value = Number(row.metric_value) || 0;
+              const width = Math.max(6, value / maxValue * 100);
+              return `
+                <div class="chart-bar-row">
+                  <div class="chart-bar-label">${escapeHtml(rankMode ? `${index + 1}. ${shortBucketLabel(row.bucket)}` : shortBucketLabel(row.bucket))}</div>
+                  <div class="chart-bar-track"><div class="chart-bar-fill" style="width:${width}%"></div></div>
+                  <div class="chart-bar-value">${escapeHtml(formatChartNumber(value))}</div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    }
+    function widgetTemplate(widget) {
+      const preview = findWidgetPreview(widget.id);
+      const pos = widget.position || {};
+      const colStyle = `grid-column: span ${pos.w || 3}; min-height:${(pos.h || 2) * 56}px;`;
+      const active = widget.id === editorState.activeWidgetId ? ' active' : '';
+      if (preview?.error) {
+        return `<section class="widget${active}" style="${colStyle}" data-widget-id="${escapeHtml(widget.id)}"><div class="title">${escapeHtml(widget.title || widget.id)}</div><div class="sub">${escapeHtml(preview.error)}</div></section>`;
+      }
+      if (widget.type === 'kpi') {
+        const value = preview?.data?.value;
+        return `<section class="widget kpi${active}" style="${colStyle}" data-widget-id="${escapeHtml(widget.id)}"><div class="title">${escapeHtml(widget.title || widget.id)}</div><div class="value">${escapeHtml(value == null ? '-' : value)}</div><div class="sub">${escapeHtml(metricLabel(preview?.data?.metric || widget.binding?.metric || {}))}</div></section>`;
+      }
+      if (['line', 'bar', 'rank_bar'].includes(widget.type)) {
+        const rows = preview?.data?.rows || [];
+        const emptyText = widget.type === 'line' ? '暂无趋势数据' : '暂无分组数据';
+        const grainText = preview?.data?.time_grain && preview.data.time_grain !== 'raw' ? ` · ${preview.data.time_grain}` : '';
+        const limitText = preview?.data?.limit ? ` · Top ${preview.data.limit}` : '';
+        const chartHtml = widget.type === 'line'
+          ? renderLineChart(rows)
+          : renderBarChart(rows, widget.type === 'rank_bar');
+        return `<section class="widget${active}" style="${colStyle}" data-widget-id="${escapeHtml(widget.id)}"><div class="title">${escapeHtml(widget.title || widget.id)}</div><div class="sub">${escapeHtml((preview?.data?.bucket_field || '') + grainText + ' / ' + metricLabel(preview?.data?.metric || widget.binding?.metric || {} ) + limitText)}</div>${rows.length ? chartHtml : `<div class="empty">${emptyText}</div>`}</section>`;
+      }
+      if (widget.type === 'table') {
+        const cols = preview?.data?.columns || [];
+        const rows = preview?.data?.rows || [];
+        return `<section class="widget${active}" style="${colStyle}" data-widget-id="${escapeHtml(widget.id)}"><div class="title">${escapeHtml(widget.title || widget.id)}</div><div class="widget-table">${cols.length ? `<div class="widget-row head">${cols.slice(0,3).map((col)=>`<span>${escapeHtml(col)}</span>`).join('')}</div>${rows.slice(0,5).map((row)=>`<div class="widget-row">${cols.slice(0,3).map((col)=>`<span>${escapeHtml(row[col])}</span>`).join('')}</div>`).join('')}` : '<div class="empty">暂无明细数据</div>'}</div></section>`;
+      }
+      return `<section class="widget empty${active}" style="${colStyle}" data-widget-id="${escapeHtml(widget.id)}">未支持的组件类型</section>`;
+    }
+    function bindCanvasEvents() {
+      document.querySelectorAll('[data-widget-id]').forEach((node) => {
+        node.addEventListener('click', () => {
+          editorState.activeWidgetId = node.dataset.widgetId || '';
+          renderEditor();
+        });
+      });
+    }
+    function activeWidget() {
+      return (editorState.dashboard?.widgets || []).find((item) => item.id === editorState.activeWidgetId) || null;
+    }
+    function ensureActiveWidget() {
+      const widgets = editorState.dashboard?.widgets || [];
+      if (!widgets.length) {
+        editorState.activeWidgetId = '';
+        return;
+      }
+      if (!widgets.some((item) => item.id === editorState.activeWidgetId)) {
+        editorState.activeWidgetId = widgets[0].id;
+      }
+    }
+    function renderWidgetBinding() {
+      const widget = activeWidget();
+      const widgetSelect = document.getElementById('widgetSelect');
+      const titleInput = document.getElementById('widgetTitleInput');
+      const metricSelect = document.getElementById('widgetMetricSelect');
+      const timeSelect = document.getElementById('widgetTimeFieldSelect');
+      const seriesTypeSelect = document.getElementById('widgetSeriesTypeSelect');
+      const timeGrainSelect = document.getElementById('widgetTimeGrainSelect');
+      const sortOrderSelect = document.getElementById('widgetSortOrderSelect');
+      const limitInput = document.getElementById('widgetLimitInput');
+      const columnsSelect = document.getElementById('widgetColumnsSelect');
+      const hint = document.getElementById('widgetBindHint');
+      const widgets = editorState.dashboard?.widgets || [];
+      widgetSelect.innerHTML = widgets.map((item) => `<option value="${escapeHtml(item.id)}" ${item.id === editorState.activeWidgetId ? 'selected' : ''}>${escapeHtml(item.title || item.id)}</option>`).join('') || '<option value="">暂无组件</option>';
+      if (!widget) {
+        titleInput.value = '';
+        metricSelect.innerHTML = '<option value="">暂无指标</option>';
+        timeSelect.innerHTML = '<option value="">暂无时间字段</option>';
+        seriesTypeSelect.value = 'line';
+        timeGrainSelect.value = 'raw';
+        sortOrderSelect.value = 'asc';
+        limitInput.value = '';
+        columnsSelect.innerHTML = '';
+        hint.textContent = '先新增组件，再绑定数据集字段。';
+        return;
+      }
+      titleInput.value = widget.title || '';
+      const metrics = datasetMetrics();
+      metricSelect.innerHTML = metrics.map((metric) => {
+        const key = metricKey(metric);
+        const selected = key === (widget.binding?.metric_key || '');
+        return `<option value="${escapeHtml(key)}" ${selected ? 'selected' : ''}>${escapeHtml(metricLabel(metric))}</option>`;
+      }).join('') || '<option value="">暂无指标</option>';
+      const timeField = editorState.dataset?.time_field || '';
+      const dimensionOptions = datasetDimensions().map((item) => item.field).filter(Boolean);
+      timeSelect.innerHTML = ['<option value="">不设置</option>', ...[timeField, ...dimensionOptions].filter((item, index, arr) => item && arr.indexOf(item) === index).map((field) => `<option value="${escapeHtml(field)}" ${((widget.binding?.time_field || widget.binding?.dimension_field || '') === field) ? 'selected' : ''}>${escapeHtml(field)}</option>`)].join('');
+      seriesTypeSelect.value = ['line', 'bar', 'rank_bar'].includes(widget.type) ? widget.type : 'line';
+      timeGrainSelect.value = widget.binding?.time_grain || 'raw';
+      sortOrderSelect.value = widget.binding?.sort_order || (widget.type === 'line' ? 'asc' : 'metric_desc');
+      limitInput.value = widget.binding?.limit || '';
+      const selectedColumns = new Set(Array.isArray(widget.binding?.columns) ? widget.binding.columns : []);
+      columnsSelect.innerHTML = datasetColumns().map((column) => `<option value="${escapeHtml(column)}" ${selectedColumns.has(column) ? 'selected' : ''}>${escapeHtml(column)}</option>`).join('');
+      document.getElementById('metricBindingField').style.display = ['kpi','line','bar','rank_bar'].includes(widget.type) ? 'grid' : 'none';
+      document.getElementById('timeBindingField').style.display = ['line','bar','rank_bar'].includes(widget.type) ? 'grid' : 'none';
+      document.getElementById('seriesTypeField').style.display = ['line','bar','rank_bar'].includes(widget.type) ? 'grid' : 'none';
+      document.getElementById('seriesGrainField').style.display = ['line','bar','rank_bar'].includes(widget.type) ? 'grid' : 'none';
+      document.getElementById('seriesSortField').style.display = ['line','bar','rank_bar'].includes(widget.type) ? 'grid' : 'none';
+      document.getElementById('seriesLimitField').style.display = ['line','bar','rank_bar'].includes(widget.type) ? 'grid' : 'none';
+      document.getElementById('columnBindingField').style.display = widget.type === 'table' ? 'grid' : 'none';
+      hint.textContent = widget.type === 'kpi' ? 'KPI 绑定 1 个指标。' : (widget.type === 'line' ? '趋势图绑定时间字段 + 指标。' : (['bar','rank_bar'].includes(widget.type) ? '分组图绑定维度字段 + 指标。' : '明细表绑定要展示的字段。'));
+    }
+    function renderEditor() {
+      const dashboard = editorState.dashboard || {};
+      document.getElementById('dashboardTitle').textContent = dashboard.name || dashboard.id || '看板';
+      document.getElementById('dashboardDatasetHint').textContent = `数据集：${dashboard.dataset_id || '-'} · 主表：${editorState.dataset?.linked_table || '-'}`;
+      document.getElementById('dashboardNameInput').value = dashboard.name || '';
+      document.getElementById('dashboardDescInput').value = dashboard.description || '';
+      document.getElementById('dashboardDatasetInput').value = dashboard.dataset_id || '';
+      document.getElementById('dashboardLayoutMode').value = dashboard.layout_mode || 'overview';
+      document.getElementById('dashboardSummary').innerHTML = [
+        `<span class="chip">维度 ${escapeHtml(datasetDimensions().length)}</span>`,
+        `<span class="chip">指标 ${escapeHtml(datasetMetrics().length)}</span>`,
+        `<span class="chip">组件 ${escapeHtml((dashboard.widgets || []).length)}</span>`
+      ].join('');
+      ensureActiveWidget();
+      document.getElementById('dashboardCanvas').innerHTML = (dashboard.widgets || []).map(widgetTemplate).join('') || '<div class="empty">当前看板还没有组件</div>';
+      bindCanvasEvents();
+      renderWidgetBinding();
+    }
+    async function reloadPreview() {
+      const parts = window.location.pathname.split('/').filter(Boolean);
+      const dashboardId = parts[1];
+      editorState.preview = await fetchJson(`/api/dashboard-preview/${encodeURIComponent(dashboardId)}`);
+      renderEditor();
+    }
+    function buildWidgetBindingForType(type) {
+      const metrics = datasetMetrics();
+      const metric = metrics[0] || null;
+      const timeField = editorState.dataset?.time_field || '';
+      const dimensionField = datasetDimensions()[0]?.field || '';
+      if (type === 'kpi') return { metric_key: metric ? metricKey(metric) : '', metric };
+      if (type === 'line') return { metric_key: metric ? metricKey(metric) : '', metric, time_field: timeField, time_grain: 'day', sort_order: 'asc', limit: 24 };
+      if (['bar', 'rank_bar'].includes(type)) return { metric_key: metric ? metricKey(metric) : '', metric, dimension_field: dimensionField || timeField, time_grain: 'raw', sort_order: 'metric_desc', limit: 12 };
+      if (type === 'table') return { columns: datasetColumns().slice(0, 3) };
+      return {};
+    }
+    function addWidget(type) {
+      const widgets = editorState.dashboard.widgets || [];
+      const index = widgets.length + 1;
+      const base = type === 'kpi' ? { w: 3, h: 2 } : (type === 'line' ? { w: 8, h: 4 } : { w: 12, h: 5 });
+      const widget = { id: `${type}_${Date.now()}`, type, title: type === 'kpi' ? `KPI ${index}` : (type === 'line' ? `趋势图 ${index}` : `明细表 ${index}`), position: { x: 0, y: index * 2, ...base }, binding: buildWidgetBindingForType(type) };
+      editorState.dashboard.widgets = [...widgets, widget];
+      editorState.activeWidgetId = widget.id;
+      renderEditor();
+    }
+    function applyWidgetForm() {
+      const widget = activeWidget();
+      if (!widget) return;
+      const nextType = document.getElementById('widgetSeriesTypeSelect').value || widget.type;
+      if (['line', 'bar', 'rank_bar'].includes(widget.type) && ['line', 'bar', 'rank_bar'].includes(nextType)) {
+        widget.type = nextType;
+      }
+      widget.title = document.getElementById('widgetTitleInput').value.trim() || widget.title;
+      if (widget.type === 'kpi') {
+        widget.binding = { metric_key: document.getElementById('widgetMetricSelect').value, metric: datasetMetrics().find((item) => metricKey(item) === document.getElementById('widgetMetricSelect').value) || null };
+      } else if (widget.type === 'line') {
+        widget.binding = {
+          metric_key: document.getElementById('widgetMetricSelect').value,
+          metric: datasetMetrics().find((item) => metricKey(item) === document.getElementById('widgetMetricSelect').value) || null,
+          time_field: document.getElementById('widgetTimeFieldSelect').value,
+          time_grain: document.getElementById('widgetTimeGrainSelect').value,
+          sort_order: document.getElementById('widgetSortOrderSelect').value,
+          limit: Number(document.getElementById('widgetLimitInput').value || 24),
+        };
+      } else if (['bar', 'rank_bar'].includes(widget.type)) {
+        widget.binding = {
+          metric_key: document.getElementById('widgetMetricSelect').value,
+          metric: datasetMetrics().find((item) => metricKey(item) === document.getElementById('widgetMetricSelect').value) || null,
+          dimension_field: document.getElementById('widgetTimeFieldSelect').value,
+          time_grain: document.getElementById('widgetTimeGrainSelect').value,
+          sort_order: document.getElementById('widgetSortOrderSelect').value,
+          limit: Number(document.getElementById('widgetLimitInput').value || 12),
+        };
+      } else if (widget.type === 'table') {
+        widget.binding = { columns: Array.from(document.getElementById('widgetColumnsSelect').selectedOptions).map((item) => item.value) };
+      }
+    }
+    async function saveDashboard() {
+      applyWidgetForm();
+      const payload = editorState.dashboard;
+      const parts = window.location.pathname.split('/').filter(Boolean);
+      const dashboardId = parts[1];
+      const updated = await fetchJson(`/api/dashboards/${encodeURIComponent(dashboardId)}/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: document.getElementById('dashboardNameInput').value.trim() || payload.name,
+          description: document.getElementById('dashboardDescInput').value.trim(),
+          dataset_id: payload.dataset_id,
+          layout_mode: document.getElementById('dashboardLayoutMode').value,
+          widgets: payload.widgets || [],
+          status: payload.status || 'draft',
+        }),
+      });
+      editorState.dashboard = updated;
+      document.getElementById('editorStatus').textContent = '已保存，正在刷新预览数据…';
+      document.getElementById('editorStatus').className = 'status ok';
+      await reloadPreview();
+      document.getElementById('editorStatus').textContent = '已保存';
+      document.getElementById('editorStatus').className = 'status ok';
+    }
+    async function loadDashboard() {
+      const parts = window.location.pathname.split('/').filter(Boolean);
+      const dashboardId = parts[1];
+      const dashboard = await fetchJson(`/api/dashboards/${encodeURIComponent(dashboardId)}`);
+      const dataset = dashboard.dataset_id ? await fetchJson(`/api/datasets/${encodeURIComponent(dashboard.dataset_id)}`) : null;
+      editorState.dashboard = dashboard;
+      editorState.dataset = dataset;
+      await reloadPreview();
+      document.getElementById('editorStatus').textContent = `已加载看板 ${dashboard.id}`;
+    }
+    document.getElementById('backDashboardsBtn').addEventListener('click', () => { window.location.href = '/dashboards'; });
+    document.getElementById('openDatasetsBtn').addEventListener('click', () => { window.location.href = '/datasets'; });
+    document.getElementById('previewDashboardBtn').addEventListener('click', () => {
+      const parts = window.location.pathname.split('/').filter(Boolean);
+      window.location.href = `/dashboards/${encodeURIComponent(parts[1])}`;
+    });
+    document.getElementById('saveDashboardBtn').addEventListener('click', () => {
+      saveDashboard().catch((error) => {
+        document.getElementById('editorStatus').textContent = error.message || '保存失败';
+        document.getElementById('editorStatus').className = 'status';
+      });
+    });
+    document.querySelectorAll('[data-add-widget]').forEach((btn) => btn.addEventListener('click', () => addWidget(btn.dataset.addWidget || 'kpi')));
+    document.getElementById('widgetSelect').addEventListener('change', (event) => { editorState.activeWidgetId = event.target.value; renderEditor(); });
+    document.getElementById('widgetTitleInput').addEventListener('input', applyWidgetForm);
+    document.getElementById('widgetMetricSelect').addEventListener('change', applyWidgetForm);
+    document.getElementById('widgetTimeFieldSelect').addEventListener('change', applyWidgetForm);
+    document.getElementById('widgetSeriesTypeSelect').addEventListener('change', () => { applyWidgetForm(); renderEditor(); });
+    document.getElementById('widgetTimeGrainSelect').addEventListener('change', applyWidgetForm);
+    document.getElementById('widgetSortOrderSelect').addEventListener('change', applyWidgetForm);
+    document.getElementById('widgetLimitInput').addEventListener('input', applyWidgetForm);
+    document.getElementById('widgetColumnsSelect').addEventListener('change', applyWidgetForm);
+    document.getElementById('removeWidgetBtn').addEventListener('click', () => {
+      if (!editorState.activeWidgetId) return;
+      editorState.dashboard.widgets = (editorState.dashboard.widgets || []).filter((item) => item.id !== editorState.activeWidgetId);
+      editorState.activeWidgetId = '';
+      renderEditor();
+    });
+    loadDashboard().catch((error) => {
+      document.getElementById('editorStatus').textContent = error.message || '看板加载失败';
+    });
+  </script>
+</body>
+</html>

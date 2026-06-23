@@ -8033,22 +8033,22 @@ class DataMapHandler(BaseHTTPRequestHandler):
             self._send_html(_load_repo_html_template("map.html", HTML_TEMPLATE))
             return
         if parsed.path == "/sql-workbench":
-            self._send_html(SQL_WORKBENCH_TEMPLATE)
+            self._send_html(_load_repo_html_template("sql-workbench.html", SQL_WORKBENCH_TEMPLATE))
             return
         if parsed.path == "/datasets":
-            self._send_html(DATASETS_TEMPLATE)
+            self._send_html(_load_repo_html_template("datasets.html", DATASETS_TEMPLATE))
             return
         if re.fullmatch(r"/datasets/[^/]+", parsed.path):
-            self._send_html(DATASET_DETAIL_TEMPLATE)
+            self._send_html(_load_repo_html_template("dataset-detail.html", DATASET_DETAIL_TEMPLATE))
             return
         if parsed.path == "/dashboards":
-            self._send_html(DASHBOARDS_TEMPLATE)
+            self._send_html(_load_repo_html_template("dashboards.html", DASHBOARDS_TEMPLATE))
             return
         if re.fullmatch(r"/dashboards/[^/]+/edit", parsed.path):
-            self._send_html(DASHBOARD_EDITOR_TEMPLATE)
+            self._send_html(_load_repo_html_template("dashboard-editor.html", DASHBOARD_EDITOR_TEMPLATE))
             return
         if re.fullmatch(r"/dashboards/[^/]+", parsed.path):
-            self._send_html(DASHBOARD_VIEW_TEMPLATE)
+            self._send_html(_load_repo_html_template("dashboard-view.html", DASHBOARD_VIEW_TEMPLATE))
             return
         if parsed.path == "/api/sql-workspace":
             payload = self.service.get_sql_workspace()

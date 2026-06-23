@@ -1,0 +1,2106 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SQL 工作台</title>
+  <style>
+    :root {
+      --bg: #eef1f5;
+      --surface: #ffffff;
+      --surface-soft: #f8fafc;
+      --ink: #111827;
+      --muted: #6b7280;
+      --line: #dbe2ea;
+      --brand: #1a73e8;
+      --brand-soft: rgba(26,115,232,0.08);
+      --danger: #dc2626;
+      --ok: #0d9488;
+      --radius: 10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Helvetica Neue", sans-serif; font-size: 13px; color: var(--ink); background: var(--bg); min-height: 100vh; overflow: hidden; }
+    button, input, textarea, select { font: inherit; }
+    .page { --wb-result-height: 320px; display: grid; grid-template-rows: 48px minmax(0, 1fr) 10px var(--wb-result-height); height: 100vh; overflow: hidden; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #111827; color: #fff; padding: 0 18px; }
+    .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+    .dot { width: 8px; height: 8px; border-radius: 999px; background: #1a73e8; }
+    .topbar-actions { display: flex; align-items: center; gap: 8px; }
+    .topbar-btn { height: 30px; padding: 0 12px; border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.92); cursor: pointer; }
+    .topbar-btn:hover { background: rgba(255,255,255,0.14); }
+    .shell { display: grid; grid-template-columns: 220px minmax(0, 1fr) 480px; gap: 1px; min-height: 0; background: var(--line); }
+    .shell.meta-collapsed { grid-template-columns: 220px minmax(0, 1fr) 54px; }
+    .shell.meta-collapsed .panel.meta { display: none; }
+    .meta-rail { display: none; min-width: 0; min-height: 0; background: var(--surface); align-items: center; justify-content: center; border-left: 1px solid var(--line); }
+    .shell.meta-collapsed .meta-rail { display: flex; }
+    .meta-rail-btn { width: 36px; min-height: 180px; border: 1px solid var(--line); border-radius: 12px; background: #fff; color: var(--muted); cursor: pointer; writing-mode: vertical-rl; text-orientation: mixed; letter-spacing: 0.08em; padding: 12px 8px; }
+    .meta-rail-btn:hover { background: var(--brand-soft); color: var(--brand); border-color: rgba(26,115,232,0.24); }
+    .panel { min-width: 0; min-height: 0; background: var(--surface); display: flex; flex-direction: column; }
+    .panel.meta { min-width: 380px; }
+    .panel.result { border-top: 1px solid var(--line); overflow: hidden; }
+    .result-splitter { position: relative; background: linear-gradient(180deg, rgba(148,163,184,0.14), rgba(148,163,184,0.24)); cursor: ns-resize; touch-action: none; }
+    .result-splitter::before { content: ""; position: absolute; left: 50%; top: 50%; width: 72px; height: 4px; border-radius: 999px; background: rgba(148,163,184,0.72); transform: translate(-50%, -50%); transition: background 0.18s ease, width 0.18s ease; }
+    .result-splitter:hover::before, .result-splitter.dragging::before { width: 96px; background: rgba(26,115,232,0.92); }
+    body.result-resizing, body.result-resizing * { cursor: ns-resize !important; user-select: none !important; }
+    .panel-head { padding: 14px 16px 12px; border-bottom: 1px solid var(--line); display: grid; gap: 8px; }
+    .panel-head.meta-head { grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
+    .panel-title { font-size: 18px; font-weight: 700; }
+    .panel-sub { color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .tree-actions, .editor-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn-primary, .btn-ghost { height: 32px; padding: 0 12px; border-radius: 8px; cursor: pointer; }
+    .btn-primary { border: 0; background: var(--brand); color: #fff; font-weight: 600; }
+    .btn-ghost { border: 1px solid var(--line); background: var(--surface); color: var(--muted); }
+    .tree-body, .meta-body, .editor-body, .result-body { min-height: 0; overflow: auto; }
+    .tree-body { padding: 10px 10px 16px; }
+    .tree-node { display: grid; gap: 4px; }
+    .tree-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: center; }
+    .tree-folder-label, .tree-file-label { width: 100%; text-align: left; border: 0; background: transparent; cursor: pointer; border-radius: 8px; padding: 8px 10px; color: var(--ink); min-width: 0; }
+    .tree-folder-label:hover, .tree-file-label:hover { background: var(--brand-soft); }
+    .tree-folder-label.active { background: rgba(180,83,9,0.10); color: #92400e; font-weight: 700; }
+    .tree-file-label.active { background: var(--brand-soft); color: var(--brand); font-weight: 700; }
+    .tree-item-title { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
+    .tree-item-menu-btn { width: 28px; height: 28px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: #94a3b8; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+    .tree-item-menu-btn:hover { background: rgba(26,115,232,0.08); color: var(--brand); border-color: rgba(26,115,232,0.14); }
+    .tree-item-menu-btn.hidden { visibility: hidden; }
+    .tree-children { padding-left: 12px; display: grid; gap: 4px; }
+    .folder-mark { color: #b45309; margin-right: 6px; }
+    .file-mark { color: var(--brand); margin-right: 6px; }
+    .tree-selection { color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .tree-menu { position: fixed; z-index: 90; min-width: 148px; border: 1px solid rgba(148,163,184,0.22); border-radius: 12px; background: #fff; box-shadow: 0 18px 48px rgba(15,23,42,0.20); padding: 6px; display: grid; gap: 4px; }
+    .tree-menu.hidden { display: none; }
+    .tree-menu button { border: 0; background: transparent; text-align: left; border-radius: 8px; padding: 8px 10px; font-size: 12px; color: var(--ink); cursor: pointer; }
+    .tree-menu button:hover { background: rgba(26,115,232,0.08); color: var(--brand); }
+    .tree-menu button.danger:hover { background: rgba(220,38,38,0.08); color: var(--danger); }
+    .editor-head-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+    .editor-meta { color: var(--muted); font-size: 12px; }
+    .linked-table-card { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-soft); }
+    .linked-table-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+    .linked-table-label { font-size: 12px; color: var(--muted); }
+    .linked-table-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .editor-body { padding: 14px 16px 18px; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 12px; }
+    .field-inline { width: 100%; height: 36px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); padding: 0 12px; }
+    .sql-editor { width: 100%; min-height: 420px; height: clamp(420px, 48vh, 720px); border: 1px solid var(--line); border-radius: 10px; background: #0f141b; color: #e5e7eb; padding: 16px; font: 13px/1.65 "SF Mono", ui-monospace, monospace; resize: vertical; outline: none; }
+    .editor-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .editor-toolbar .spacer { flex: 1; }
+    .editor-note { color: var(--muted); font-size: 12px; }
+    .status { min-height: 18px; font-size: 12px; color: var(--muted); }
+    .status.ok { color: var(--ok); }
+    .status.error { color: var(--danger); }
+    .result-body { flex: 1 1 auto; padding: 14px 16px 18px; }
+    .result-card { border: 1px solid var(--line); border-radius: 10px; background: var(--surface-soft); padding: 12px; display: grid; gap: 10px; }
+    .result-meta { color: var(--muted); font-size: 12px; }
+    .result-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+    .result-stack { display: grid; gap: 10px; }
+    .result-notices { display: grid; gap: 6px; }
+    .result-notice { padding: 8px 10px; border-radius: 8px; background: rgba(26,115,232,0.08); color: #1d4ed8; font-size: 12px; line-height: 1.5; border: 1px solid rgba(26,115,232,0.14); }
+    .pager { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--muted); font-size: 12px; }
+    .pager input { width: 76px; }
+    .table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+    table { width: 100%; border-collapse: collapse; min-width: 680px; }
+    th, td { padding: 8px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; font-size: 12px; line-height: 1.5; }
+    th:not(:last-child), td:not(:last-child) { border-right: 1px solid rgba(148,163,184,0.16); }
+    th { position: sticky; top: 0; background: #f8fafc; color: #6b7280; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .th-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+    .th-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .th-filter-btn { width: 22px; height: 22px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: #94a3b8; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+    .th-filter-btn:hover { background: rgba(26,115,232,0.08); color: var(--brand); border-color: rgba(26,115,232,0.14); }
+    .th-filter-btn.active { background: rgba(26,115,232,0.10); color: var(--brand); border-color: rgba(26,115,232,0.18); }
+    .filter-popover { position: fixed; z-index: 80; width: min(280px, calc(100vw - 24px)); max-height: min(420px, calc(100vh - 24px)); border: 1px solid rgba(148,163,184,0.22); border-radius: 12px; background: #fff; box-shadow: 0 20px 56px rgba(15,23,42,0.22); display: grid; overflow: hidden; }
+    .filter-popover.hidden { display: none; }
+    .filter-popover-head { padding: 12px 14px 10px; border-bottom: 1px solid var(--line); display: grid; gap: 4px; }
+    .filter-popover-title { font-size: 13px; font-weight: 700; color: var(--ink); }
+    .filter-popover-sub { font-size: 11px; color: var(--muted); }
+    .filter-popover-search { margin: 10px 14px 0; width: calc(100% - 28px); height: 32px; border: 1px solid var(--line); border-radius: 8px; background: #fff; padding: 0 10px; font-size: 12px; }
+    .filter-popover-body { padding: 10px 14px; overflow: auto; display: grid; gap: 6px; align-content: start; }
+    .filter-popover-option { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink); }
+    .filter-popover-option input { margin: 0; }
+    .filter-popover-option .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .filter-popover-option .count { color: var(--muted); font-size: 11px; }
+    .filter-popover-empty { padding: 12px 0; color: var(--muted); font-size: 12px; text-align: center; }
+    .filter-popover-actions { padding: 12px 14px 14px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; gap: 8px; }
+    .result-filter-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .result-filter-hint { color: var(--muted); font-size: 12px; }
+    tbody tr:hover td { background: rgba(26,115,232,0.035); }
+    .empty, .error { padding: 18px; border-radius: 10px; font-size: 12px; }
+    .empty { border: 1px dashed var(--line); background: var(--surface-soft); color: var(--muted); text-align: center; }
+    .error { border: 1px solid rgba(220,38,38,0.18); background: rgba(220,38,38,0.06); color: var(--danger); }
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(15,23,42,0.42); display: flex; align-items: center; justify-content: center; padding: 24px; z-index: 50; }
+    .modal-backdrop.hidden { display: none; }
+    .modal-card { width: min(720px, 100%); max-height: calc(100vh - 48px); overflow: auto; border-radius: 16px; background: #fff; box-shadow: 0 28px 80px rgba(15,23,42,0.28); border: 1px solid rgba(148,163,184,0.24); }
+    .modal-head { padding: 18px 20px 12px; border-bottom: 1px solid var(--line); display: grid; gap: 6px; }
+    .modal-title { font-size: 20px; font-weight: 700; }
+    .modal-sub { color: var(--muted); font-size: 12px; line-height: 1.6; }
+    .modal-body { padding: 18px 20px; display: grid; gap: 14px; }
+    .modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .modal-field { display: grid; gap: 6px; }
+    .modal-field label { font-size: 12px; color: var(--muted); }
+    .modal-field textarea { min-height: 180px; border: 1px solid var(--line); border-radius: 10px; background: #fff; padding: 12px; font: 13px/1.6 "SF Mono", ui-monospace, monospace; resize: vertical; }
+    .modal-actions { padding: 0 20px 20px; display: flex; justify-content: flex-end; gap: 10px; }
+    .ai-modal-card { width: min(1160px, 100%); }
+    .ai-layout { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(340px, 0.85fr); gap: 16px; }
+    .ai-column { display: grid; gap: 12px; min-width: 0; }
+    .ai-card { border: 1px solid var(--line); border-radius: 12px; background: var(--surface-soft); padding: 14px; display: grid; gap: 10px; min-width: 0; }
+    .ai-card h4 { font-size: 14px; }
+    .ai-sub { color: var(--muted); font-size: 12px; line-height: 1.6; }
+    .ai-chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+    .ai-chip { height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid rgba(26,115,232,0.18); background: rgba(26,115,232,0.08); color: var(--brand); cursor: pointer; }
+    .ai-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+    .ai-thread { min-height: 380px; max-height: min(52vh, 640px); overflow: auto; display: grid; gap: 12px; align-content: start; }
+    .ai-empty { padding: 18px; border: 1px dashed rgba(148,163,184,0.45); border-radius: 12px; color: var(--muted); background: rgba(255,255,255,0.78); text-align: center; line-height: 1.6; }
+    .ai-msg { display: grid; gap: 6px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: #fff; }
+    .ai-msg.user { background: rgba(26,115,232,0.08); border-color: rgba(26,115,232,0.16); }
+    .ai-msg.assistant { background: #fff; }
+    .ai-role { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+    .ai-msg.user .ai-role { color: var(--brand); }
+    .ai-body { white-space: pre-wrap; word-break: break-word; line-height: 1.65; font-size: 13px; color: var(--ink); }
+    .ai-prompt { width: 100%; min-height: 128px; border: 1px solid var(--line); border-radius: 10px; background: #fff; padding: 12px; font: 13px/1.65 inherit; resize: vertical; }
+    .ai-context-input { width: 100%; min-height: 86px; border: 1px solid var(--line); border-radius: 10px; background: #fff; padding: 10px 12px; font: 12px/1.65 "SF Mono", ui-monospace, monospace; resize: vertical; }
+    .ai-advanced { border-top: 1px dashed rgba(148,163,184,0.5); padding-top: 10px; display: grid; gap: 10px; }
+    .ai-advanced summary { cursor: pointer; color: var(--muted); font-size: 12px; font-weight: 600; }
+    .ai-stage-card { border: 1px solid rgba(26,115,232,0.14); border-radius: 12px; background: rgba(26,115,232,0.05); padding: 12px 14px; display: grid; gap: 8px; }
+    .ai-stage-title { font-size: 13px; font-weight: 700; color: var(--ink); }
+    .ai-stage-copy { font-size: 12px; color: var(--muted); line-height: 1.65; }
+    .ai-stage-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .ai-rel-list { display: grid; gap: 8px; }
+    .ai-rel-item { border: 1px solid rgba(148,163,184,0.2); border-radius: 10px; background: #fff; padding: 10px 12px; display: grid; gap: 5px; }
+    .ai-rel-main { font-size: 12px; color: var(--ink); word-break: break-word; }
+    .ai-rel-meta { display: flex; gap: 8px; flex-wrap: wrap; color: var(--muted); font-size: 11px; }
+    .ai-rel-meta span { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; background: rgba(148,163,184,0.12); }
+    .ai-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+    .ai-status { min-height: 18px; font-size: 12px; color: var(--muted); }
+    .ai-status.ok { color: var(--ok); }
+    .ai-status.error { color: var(--danger); }
+    .ai-generated-sql { width: 100%; min-height: 260px; border: 1px solid #1f2937; border-radius: 12px; background: #0f141b; color: #e5e7eb; padding: 14px; font: 12px/1.65 "SF Mono", ui-monospace, monospace; resize: vertical; }
+    .ai-context-list { display: grid; gap: 6px; font-size: 12px; color: var(--muted); line-height: 1.6; }
+    .ai-follow-list { display: grid; gap: 6px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+    .ai-candidate-list { display: grid; gap: 10px; }
+    .ai-candidate-item { width: 100%; text-align: left; border: 1px solid rgba(26,115,232,0.16); border-radius: 12px; background: #fff; padding: 12px 14px; display: grid; gap: 7px; cursor: pointer; transition: border-color 0.12s, background 0.12s, transform 0.12s; }
+    .ai-candidate-item:hover { border-color: rgba(26,115,232,0.42); background: rgba(26,115,232,0.05); transform: translateY(-1px); }
+    .ai-candidate-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+    .ai-candidate-name { font-size: 13px; font-weight: 700; color: var(--ink); word-break: break-word; }
+    .ai-candidate-score { font-size: 11px; color: var(--brand); border: 1px solid rgba(26,115,232,0.18); border-radius: 999px; padding: 2px 8px; background: rgba(26,115,232,0.08); }
+    .ai-candidate-sub { font-size: 12px; color: var(--muted); line-height: 1.6; word-break: break-word; }
+    .ai-candidate-meta { display: flex; gap: 8px; flex-wrap: wrap; color: var(--muted); font-size: 11px; }
+    .ai-candidate-meta span { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; background: rgba(148,163,184,0.12); }
+    @media (max-width: 1200px) {
+      .page { --wb-result-height: 300px; }
+      .ai-layout { grid-template-columns: 1fr; }
+    }
+    .wb-meta-body { padding: 14px 16px 18px; display: grid; gap: 10px; min-height: 0; }
+    .wb-meta-card { border: 1px solid var(--line); border-radius: 10px; background: var(--surface-soft); padding: 12px; display: grid; gap: 8px; min-width: 0; min-height: 0; }
+    .wb-meta-card h4 { font-size: 13px; }
+    .wb-meta-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+    .wb-meta-tab { height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: #fff; color: var(--muted); cursor: pointer; }
+    .wb-meta-tab.active { background: var(--brand); border-color: var(--brand); color: #fff; font-weight: 600; }
+    .wb-field-search { width: 100%; height: 34px; border: 1px solid var(--line); border-radius: 8px; background: #fff; padding: 0 12px; }
+    .wb-field-list { display: grid; gap: 8px; max-height: 520px; overflow: auto; align-content: start; min-width: 0; }
+    .wb-field-item { width: 100%; border: 1px solid var(--line); border-radius: 8px; background: #fff; padding: 9px 10px; cursor: pointer; display: grid; gap: 5px; text-align: left; }
+    .wb-field-item:hover { border-color: #a7c7f2; background: var(--brand-soft); }
+    .wb-field-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+    .wb-field-name { font-weight: 700; color: var(--ink); word-break: break-all; }
+    .wb-field-meta { color: var(--muted); font-size: 11px; line-height: 1.4; word-break: break-word; }
+    .wb-type-badge { display: inline-flex; align-items: center; padding: 2px 7px; border-radius: 999px; background: rgba(26,115,232,0.08); color: var(--brand); font-size: 11px; font-family: "SF Mono", ui-monospace, monospace; border: 1px solid rgba(26,115,232,0.12); white-space: nowrap; }
+    .wb-ddl-box { margin: 0; border: 1px solid #dbe2ea; border-radius: 8px; background: #0f141b; color: #e5e7eb; padding: 12px; overflow: auto; min-height: 260px; max-height: 520px; max-width: 100%; font: 12px/1.55 "SF Mono", ui-monospace, monospace; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
+    .hidden { display: none !important; }
+    .prompt-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .prompt-row input { flex: 1; min-width: 180px; height: 34px; border: 1px solid var(--line); border-radius: 8px; background: #fff; padding: 0 12px; }
+    @media (max-width: 1200px) {
+      .shell { grid-template-columns: 200px minmax(0, 1fr); }
+      .panel.meta { grid-column: 1 / -1; border-top: 1px solid var(--line); }
+    }
+    @media (max-width: 860px) {
+      .shell { grid-template-columns: 1fr; }
+      .panel.tree, .panel.meta { min-height: 220px; }
+      .page { --wb-result-height: 240px; }
+      .result-splitter::before { width: 56px; }
+      .modal-grid { grid-template-columns: 1fr; }
+      .ai-modal-card { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <div class="brand"><span class="dot"></span>SQL 工作台</div>
+      <div class="topbar-actions">
+        <button class="topbar-btn" type="button" id="openFromTableBtn">回到数据地图</button>
+        <button class="topbar-btn" type="button" id="openDatasetsFromWorkbenchBtn">数据集</button>
+        <button class="topbar-btn" type="button" id="openDashboardsFromWorkbenchBtn">看板</button>
+      </div>
+    </header>
+    <div class="shell">
+      <aside class="panel tree">
+        <div class="panel-head">
+          <div class="panel-title" style="font-size:16px">查询目录</div>
+          <div class="panel-sub">建文件夹、建 SQL 文件，按主题沉淀查询。</div>
+          <div class="tree-actions">
+            <button type="button" class="btn-primary" id="newSqlFileBtn">新建 SQL</button>
+            <button type="button" class="btn-ghost" id="newFolderBtn">新建文件夹</button>
+          </div>
+          <div class="tree-selection" id="treeSelectionHint">当前新建位置：个人查询</div>
+        </div>
+        <div class="tree-body" id="treeBody"></div>
+      </aside>
+
+      <main class="panel editor">
+        <div class="panel-head">
+          <div class="editor-head-row">
+            <div>
+              <div class="panel-title" id="editorTitle">未选择 SQL 文件</div>
+              <div class="editor-meta" id="editorMeta">从左侧打开或新建一个 SQL 文件开始。</div>
+            </div>
+          </div>
+          <div class="linked-table-card">
+            <div class="linked-table-head">
+              <div class="linked-table-label">关联表</div>
+              <div class="linked-table-actions">
+                <button type="button" class="btn-ghost" id="applyLinkedTableBtn">加载字段</button>
+              </div>
+            </div>
+            <input id="linkedTableInput" class="field-inline" type="text" placeholder="关联表，例如 public.sales_order" />
+            <div id="linkedTableStatus" class="status">关联表会驱动右侧字段和 DDL。</div>
+          </div>
+        </div>
+        <div class="editor-body">
+          <div class="editor-toolbar">
+            <button type="button" class="btn-primary" id="runWorkbenchSqlBtn">执行</button>
+            <button type="button" class="btn-ghost" id="saveWorkbenchSqlBtn">保存</button>
+            <button type="button" class="btn-ghost" id="saveAsDatasetBtn">保存为数据集</button>
+            <button type="button" class="btn-ghost" id="openAiWorkbenchBtn">AI 助手</button>
+            <div class="spacer"></div>
+            <label class="editor-note">默认每页条数（1-500）
+              <input id="workbenchRowLimit" class="field-inline" type="number" min="1" max="500" value="200" style="width:108px;height:32px;display:inline-flex" />
+            </label>
+          </div>
+          <textarea id="workbenchSqlEditor" class="sql-editor" spellcheck="false" placeholder="请选择或新建一个 SQL 文件"></textarea>
+          <div id="workbenchStatus" class="status"></div>
+        </div>
+      </main>
+
+      <aside class="meta-rail">
+        <button type="button" class="meta-rail-btn" id="toggleMetaPanelBtn">查看字段</button>
+      </aside>
+
+      <aside class="panel meta">
+        <div class="panel-head meta-head">
+          <div>
+            <div class="panel-title" style="font-size:16px">元数据面板</div>
+            <div class="panel-sub">用于查看当前关联表的字段清单和建表 DDL，也可点击字段名直接插入到 SQL 编辑器。</div>
+          </div>
+          <button type="button" class="btn-ghost" id="collapseMetaPanelBtn">收起</button>
+        </div>
+        <div class="wb-meta-body">
+          <div class="wb-meta-card">
+            <div class="wb-meta-tabs">
+              <button type="button" class="wb-meta-tab active" id="metaFieldsTabBtn">字段</button>
+              <button type="button" class="wb-meta-tab" id="metaDdlTabBtn">DDL</button>
+            </div>
+          </div>
+          <div class="wb-meta-card" id="metaFieldsPanel">
+            <h4>字段搜索</h4>
+            <input id="metaFieldSearch" class="wb-field-search" type="text" placeholder="搜索字段 / 注释" />
+            <div id="metaFieldList" class="wb-field-list"></div>
+          </div>
+          <div class="wb-meta-card hidden" id="metaDdlPanel">
+            <h4>表定义</h4>
+            <div id="metaDdlWrap" class="empty">选择关联表后可查看 DDL</div>
+          </div>
+        </div>
+      </aside>
+    </div>
+    <div class="result-splitter" id="workbenchResultSplitter" role="separator" aria-orientation="horizontal" title="拖动调整执行结果区域高度"></div>
+    <section class="panel result">
+      <div class="panel-head">
+        <div class="result-stack">
+          <div class="result-toolbar">
+            <div>
+              <div class="panel-title" style="font-size:16px">执行结果</div>
+              <div class="panel-sub" id="workbenchResultMeta">尚未执行</div>
+            </div>
+            <div class="pager">
+              <label>每页
+                <input id="workbenchPageSize" class="field-inline" type="number" min="1" max="500" value="200" />
+              </label>
+              <button type="button" class="btn-ghost" id="prevWorkbenchPageBtn">上一页</button>
+              <span id="workbenchPageInfo">第 1 / 1 页</span>
+              <button type="button" class="btn-ghost" id="nextWorkbenchPageBtn">下一页</button>
+            </div>
+          </div>
+          <div class="result-filter-actions">
+            <button type="button" class="btn-primary" id="applyWorkbenchFilterBtn">应用字段筛选</button>
+            <button type="button" class="btn-ghost" id="clearWorkbenchFilterBtn">清空筛选</button>
+            <div class="result-filter-hint">点击列头右侧筛选图标，像 Excel 一样勾选值；多个字段会同时生效。</div>
+          </div>
+          <div id="workbenchResultNotices" class="result-notices hidden"></div>
+        </div>
+      </div>
+      <div class="result-body">
+        <div id="workbenchResultWrap" class="empty">执行后在这里查看结果</div>
+      </div>
+    </section>
+  </div>
+
+  <div id="treeItemMenu" class="tree-menu hidden">
+    <button type="button" id="renameTreeItemBtn">重命名</button>
+    <button type="button" id="moveTreeItemBtn">移动</button>
+    <button type="button" class="danger" id="deleteTreeItemBtn">删除</button>
+  </div>
+
+  <div id="workbenchFilterPopover" class="filter-popover hidden">
+    <div class="filter-popover-head">
+      <div class="filter-popover-title" id="workbenchFilterPopoverTitle">字段筛选</div>
+      <div class="filter-popover-sub" id="workbenchFilterPopoverSub">勾选要保留的值</div>
+    </div>
+    <input id="workbenchFilterPopoverSearch" class="filter-popover-search" type="text" placeholder="搜索候选值" />
+    <div id="workbenchFilterPopoverBody" class="filter-popover-body"></div>
+    <div class="filter-popover-actions">
+      <button type="button" class="btn-ghost" id="workbenchFilterPopoverClearBtn">清空本列</button>
+      <button type="button" class="btn-primary" id="workbenchFilterPopoverApplyBtn">确定</button>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="newSqlModal">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="newSqlModalTitle">
+      <div class="modal-head">
+        <div class="modal-title" id="newSqlModalTitle">新建 SQL 文件</div>
+        <div class="modal-sub">先把名称、目录、关联表和初始 SQL 一次填好，避免小弹框来回输。</div>
+      </div>
+      <div class="modal-body">
+        <div class="modal-grid">
+          <div class="modal-field">
+            <label for="newSqlFileNameInput">文件名</label>
+            <input id="newSqlFileNameInput" class="field-inline" type="text" placeholder="例如 线索转化分析" />
+          </div>
+          <div class="modal-field">
+            <label for="newSqlFolderInput">保存目录</label>
+            <input id="newSqlFolderInput" class="field-inline" type="text" placeholder="例如 个人查询/销售分析" />
+          </div>
+        </div>
+        <div class="modal-field">
+          <label for="newSqlLinkedTableInput">关联表</label>
+          <input id="newSqlLinkedTableInput" class="field-inline" type="text" placeholder="例如 public.sales_order" />
+        </div>
+        <div class="modal-field">
+          <label for="newSqlContentInput">初始 SQL</label>
+          <textarea id="newSqlContentInput" spellcheck="false"></textarea>
+        </div>
+        <div id="newSqlModalStatus" class="status"></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-ghost" id="cancelNewSqlBtn">取消</button>
+        <button type="button" class="btn-primary" id="confirmNewSqlBtn">创建并打开</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="aiWorkbenchModal">
+    <div class="modal-card ai-modal-card" role="dialog" aria-modal="true" aria-labelledby="aiWorkbenchModalTitle">
+      <div class="modal-head">
+        <div class="modal-title" id="aiWorkbenchModalTitle">AI SQL 助手</div>
+        <div class="modal-sub">基于当前关联表、字段、DDL、当前 SQL 和最近一次执行结果对话，帮你生成 SQL 和探查建议。</div>
+      </div>
+      <div class="modal-body">
+        <div class="ai-layout">
+          <div class="ai-column">
+            <div class="ai-card">
+              <h4>快捷问题</h4>
+              <div class="ai-chip-row">
+                <button type="button" class="ai-chip" data-ai-prompt="先帮我快速理解这张表，列出最值得分析的字段。">理解这张表</button>
+                <button type="button" class="ai-chip" data-ai-prompt="基于当前表给我一条数据质量探查 SQL，优先看空值、重复和异常。">质量探查</button>
+                <button type="button" class="ai-chip" data-ai-prompt="帮我写一条适合这张表的汇总分析 SQL，并说明看什么。">生成分析 SQL</button>
+                <button type="button" class="ai-chip" data-ai-prompt="解释当前编辑器里的 SQL 在做什么，并指出还能怎么优化。">解释当前 SQL</button>
+              </div>
+            </div>
+            <div class="ai-card">
+              <h4>对话</h4>
+              <div class="ai-sub">你可以直接说业务问题，AI 会尽量给出可执行 SQL；如果上下文不够，它会明确告诉你缺什么。</div>
+              <div id="aiWorkbenchThread" class="ai-thread">
+                <div class="ai-empty">还没有对话。可以先问“帮我快速看这张表能分析什么”。</div>
+              </div>
+            </div>
+            <div class="ai-card">
+              <div class="ai-toolbar">
+                <h4>输入问题</h4>
+                <button type="button" class="btn-ghost" id="clearAiWorkbenchBtn">清空对话</button>
+              </div>
+              <textarea id="aiWorkbenchPrompt" class="ai-prompt" spellcheck="false" placeholder="例如：按订单创建月份统计成交金额，并区分负责部门；再告诉我还应该补哪些筛选条件"></textarea>
+              <div id="aiWorkbenchStatus" class="ai-status"></div>
+            </div>
+          </div>
+          <div class="ai-column">
+            <div class="ai-card">
+              <div class="ai-card-head">
+                <h4>当前上下文</h4>
+                <button type="button" class="btn-ghost" id="switchAiTableSearchBtn">重新找表</button>
+              </div>
+              <div id="aiWorkbenchStage" class="ai-stage-card hidden"></div>
+              <details class="ai-advanced">
+                <summary>高级模式：手动补充上下文表</summary>
+                <div class="modal-field">
+                  <label for="aiExtraContextTablesInput">补充上下文表</label>
+                  <textarea id="aiExtraContextTablesInput" class="ai-context-input" spellcheck="false" placeholder="可填多个表，用逗号或换行分隔，例如&#10;public.sales_clue&#10;public.crm_sales_opportunity"></textarea>
+                </div>
+                <div class="ai-sub">第一张仍建议放在“关联表”里用于执行 SQL；这里的多张表只补给 AI 做联表分析、找关系、写 JOIN。</div>
+              </details>
+              <div id="aiWorkbenchContext" class="ai-context-list"></div>
+            </div>
+            <div class="ai-card">
+              <div class="ai-toolbar">
+                <h4 id="aiGeneratedSqlTitle">AI 生成 SQL</h4>
+                <button type="button" class="btn-primary" id="sendAiWorkbenchBtn">发送问题</button>
+              </div>
+              <textarea id="aiGeneratedSql" class="ai-generated-sql" spellcheck="false" placeholder="AI 生成的 SQL 会显示在这里"></textarea>
+              <div class="ai-sub">AI 不会自动执行。你可以先看 SQL，再决定写回编辑器还是直接试跑。</div>
+              <div id="aiWorkbenchFollowUps" class="ai-follow-list hidden"></div>
+              <div id="aiWorkbenchCandidates" class="ai-candidate-list hidden"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-ghost" id="closeAiWorkbenchBtn">关闭</button>
+        <button type="button" class="btn-ghost" id="insertAiSqlBtn">写入编辑器</button>
+        <button type="button" class="btn-primary" id="runAiSqlBtn">写入并试跑</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const wbParams = new URLSearchParams(window.location.search);
+    const WORKBENCH_RESULT_HEIGHT_KEY = 'sql_workbench_result_height';
+    const WORKBENCH_META_COLLAPSED_KEY = 'sql_workbench_meta_collapsed';
+    const WORKBENCH_RESULT_DEFAULT = 320;
+    const wbState = {
+      tree: null,
+      currentFilePath: wbParams.get('file') || '',
+      currentFile: null,
+      profile: null,
+      runRequestId: 0,
+      selectedFolderPath: '个人查询',
+      bootstrapDraftDone: false,
+      resultPage: 1,
+      resultPageSize: 200,
+      metaTab: 'fields',
+      resultColumns: [],
+      resultFilters: {},
+      lastRunResult: null,
+      selectedEntryPath: '',
+      selectedEntryType: 'folder',
+      treeMenu: {
+        path: '',
+        type: '',
+        anchor: null,
+      },
+      filterPopover: {
+        column: '',
+        options: [],
+        filteredOptions: [],
+        draftValues: [],
+        anchor: null,
+        requestId: 0,
+        keyword: '',
+        searchTimer: null,
+      },
+      aiAssistant: {
+        history: [],
+        generatedSql: '',
+        generatedTitle: '',
+        followUps: [],
+        tableCandidates: [],
+        contextTables: [],
+        confirmedTables: [],
+        guessedRelations: [],
+        mode: 'idle',
+        needConfirmation: false,
+        manualContextTables: [],
+        pending: false,
+      },
+    };
+
+    function escapeHtml(text) {
+      return String(text == null ? '' : text)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    function truncateMiddle(text, maxLength = 88) {
+      const value = String(text || '');
+      if (!value || value.length <= maxLength) return value;
+      const head = Math.max(18, Math.floor((maxLength - 1) * 0.65));
+      const tail = Math.max(10, maxLength - head - 1);
+      return `${value.slice(0, head)}…${value.slice(-tail)}`;
+    }
+
+    async function fetchJson(url, options = {}) {
+      const resp = await fetch(url, options);
+      const payload = await resp.json();
+      if (!resp.ok) throw new Error(payload.error || '请求失败');
+      return payload;
+    }
+
+    function renderResultTable(result) {
+      if (!result) return '<div class="empty">执行后在这里查看结果</div>';
+      const rows = result.rows || [];
+      const columns = result.columns || [];
+      if (!columns.length) return '<div class="empty">执行成功，但没有识别到结果字段</div>';
+      if (!rows.length) {
+        return `
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>${columns.map(renderResultHeaderCell).join('')}</tr>
+              </thead>
+              <tbody>
+                <tr><td colspan="${columns.length}"><div class="empty" style="margin:8px">执行成功，但没有返回数据</div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        `;
+      }
+      return `
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>${columns.map(renderResultHeaderCell).join('')}</tr>
+            </thead>
+            <tbody>
+              ${rows.map((row) => `
+                <tr>${columns.map((column) => `<td>${escapeHtml(truncateMiddle(row[column], 140))}</td>`).join('')}</tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function renderResultHeaderCell(column) {
+      const active = Array.isArray(wbState.resultFilters[column]) && wbState.resultFilters[column].length > 0;
+      return `
+        <th>
+          <div class="th-head">
+            <span class="th-title" title="${escapeHtml(column)}">${escapeHtml(column)}</span>
+            <button
+              type="button"
+              class="th-filter-btn ${active ? 'active' : ''}"
+              data-filter-column="${escapeHtml(column)}"
+              title="筛选 ${escapeHtml(column)}"
+            >▾</button>
+          </div>
+        </th>
+      `;
+    }
+
+    function normalizeWorkbenchFilterValues(raw) {
+      if (!Array.isArray(raw)) return [];
+      const seen = new Set();
+      const values = [];
+      raw.forEach((item) => {
+        const value = String(item == null ? '' : item).trim();
+        if (!value || seen.has(value)) return;
+        seen.add(value);
+        values.push(value);
+      });
+      return values;
+    }
+
+    function currentWorkbenchColumnFilters() {
+      const next = {};
+      Object.entries(wbState.resultFilters || {}).forEach(([column, values]) => {
+        const normalized = normalizeWorkbenchFilterValues(values);
+        if (normalized.length) {
+          next[column] = normalized;
+        }
+      });
+      wbState.resultFilters = next;
+      return next;
+    }
+
+    function renderResultNotices(notices = []) {
+      const el = document.getElementById('workbenchResultNotices');
+      if (!el) return;
+      const valid = (notices || []).filter(Boolean);
+      if (!valid.length) {
+        el.innerHTML = '';
+        el.classList.add('hidden');
+        return;
+      }
+      el.innerHTML = valid.map((notice) => `<div class="result-notice">${escapeHtml(notice)}</div>`).join('');
+      el.classList.remove('hidden');
+    }
+
+    function renderTreeNode(node) {
+      if (!node) return '';
+      const isLockedFolder = !node.path || node.path === '个人查询' || node.path === '临时查询';
+      const menuBtn = `
+        <button
+          type="button"
+          class="tree-item-menu-btn ${isLockedFolder ? 'hidden' : ''}"
+          data-tree-menu-path="${escapeHtml(node.path || '')}"
+          data-tree-menu-type="${escapeHtml(node.type || '')}"
+          title="更多操作"
+        >⋯</button>
+      `;
+      if (node.type === 'file') {
+        return `
+          <div class="tree-node">
+            <div class="tree-row">
+              <button type="button" class="tree-file-label ${wbState.currentFilePath === node.path ? 'active' : ''}" data-file-path="${escapeHtml(node.path)}">
+                <span class="file-mark">SQL</span><span class="tree-item-title">${escapeHtml(node.name)}</span>
+              </button>
+              ${menuBtn}
+            </div>
+          </div>
+        `;
+      }
+      const children = (node.children || []).map(renderTreeNode).join('');
+      return `
+        <div class="tree-node">
+          <div class="tree-row">
+            <button type="button" class="tree-folder-label ${wbState.selectedFolderPath === node.path ? 'active' : ''}" data-folder-path="${escapeHtml(node.path)}">
+              <span class="folder-mark">▸</span><span class="tree-item-title">${escapeHtml(node.name)}</span>
+            </button>
+            ${menuBtn}
+          </div>
+          <div class="tree-children">${children}</div>
+        </div>
+      `;
+    }
+
+    function defaultLinkedTable() {
+      return wbParams.get('schema') && wbParams.get('table')
+        ? `${wbParams.get('schema')}.${wbParams.get('table')}`
+        : '';
+    }
+
+    function defaultSqlForLinkedTable(linkedTable) {
+      return linkedTable
+        ? `SELECT
+  *
+FROM ${linkedTable}
+LIMIT 20`
+        : `SELECT
+  *
+FROM public.sales_order
+LIMIT 20`;
+    }
+
+    function normalizeRowLimit(value) {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) return 200;
+      return Math.max(1, Math.min(500, Math.floor(numeric)));
+    }
+
+    function syncWorkbenchPageSize(value, source = '') {
+      const normalized = normalizeRowLimit(value);
+      wbState.resultPageSize = normalized;
+      const rowLimitInput = document.getElementById('workbenchRowLimit');
+      const pageSizeInput = document.getElementById('workbenchPageSize');
+      if (rowLimitInput && source !== 'rowLimit') {
+        rowLimitInput.value = String(normalized);
+      }
+      if (pageSizeInput && source !== 'pageSize') {
+        pageSizeInput.value = String(normalized);
+      }
+      return normalized;
+    }
+
+    function getWorkbenchResultMinHeight() {
+      return window.innerWidth <= 860 ? 180 : 220;
+    }
+
+    function getWorkbenchResultMaxHeight() {
+      const page = document.querySelector('.page');
+      const topbar = document.querySelector('.topbar');
+      const pageHeight = page ? page.clientHeight : window.innerHeight;
+      const topbarHeight = topbar ? topbar.offsetHeight : 48;
+      const splitterHeight = 10;
+      const minShellHeight = window.innerWidth <= 860 ? 160 : 240;
+      const maxByViewport = Math.floor((pageHeight - topbarHeight) * 0.78);
+      const maxByShell = pageHeight - topbarHeight - splitterHeight - minShellHeight;
+      return Math.max(getWorkbenchResultMinHeight(), Math.min(maxByViewport, maxByShell));
+    }
+
+    function clampWorkbenchResultHeight(value) {
+      const minHeight = getWorkbenchResultMinHeight();
+      const maxHeight = getWorkbenchResultMaxHeight();
+      const fallback = Math.min(Math.max(WORKBENCH_RESULT_DEFAULT, minHeight), maxHeight);
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) return fallback;
+      return Math.round(Math.max(minHeight, Math.min(maxHeight, numeric)));
+    }
+
+    function currentWorkbenchResultHeight() {
+      const panel = document.querySelector('.panel.result');
+      if (!panel) return WORKBENCH_RESULT_DEFAULT;
+      return panel.getBoundingClientRect().height || WORKBENCH_RESULT_DEFAULT;
+    }
+
+    function applyWorkbenchResultHeight(value, options = {}) {
+      const page = document.querySelector('.page');
+      if (!page) return clampWorkbenchResultHeight(value);
+      const height = clampWorkbenchResultHeight(value);
+      page.style.setProperty('--wb-result-height', `${height}px`);
+      if (options.persist !== false) {
+        try {
+          localStorage.setItem(WORKBENCH_RESULT_HEIGHT_KEY, String(height));
+        } catch (error) {
+          console.warn('save workbench result height failed', error);
+        }
+      }
+      return height;
+    }
+
+    function restoreWorkbenchResultHeight() {
+      try {
+        const saved = localStorage.getItem(WORKBENCH_RESULT_HEIGHT_KEY);
+        applyWorkbenchResultHeight(saved || WORKBENCH_RESULT_DEFAULT, { persist: false });
+      } catch (error) {
+        console.warn('restore workbench result height failed', error);
+        applyWorkbenchResultHeight(WORKBENCH_RESULT_DEFAULT, { persist: false });
+      }
+    }
+
+    function syncWorkbenchResultHeightToViewport() {
+      applyWorkbenchResultHeight(currentWorkbenchResultHeight(), { persist: false });
+    }
+
+    function applyWorkbenchMetaCollapsed(collapsed, options = {}) {
+      const shell = document.querySelector('.shell');
+      const toggleBtn = document.getElementById('toggleMetaPanelBtn');
+      const nextCollapsed = collapsed !== false;
+      if (shell) {
+        shell.classList.toggle('meta-collapsed', nextCollapsed);
+      }
+      if (toggleBtn) {
+        const count = Number(wbState.profile?.structure?.column_count || wbState.profile?.structure?.columns?.length || 0);
+        toggleBtn.textContent = `${nextCollapsed ? '查看字段' : '收起字段'}${count ? `（${count}）` : ''}`;
+      }
+      if (options.persist !== false) {
+        try {
+          localStorage.setItem(WORKBENCH_META_COLLAPSED_KEY, nextCollapsed ? '1' : '0');
+        } catch (error) {
+          console.warn('save meta panel state failed', error);
+        }
+      }
+      return nextCollapsed;
+    }
+
+    function restoreWorkbenchMetaCollapsed() {
+      try {
+        const saved = localStorage.getItem(WORKBENCH_META_COLLAPSED_KEY);
+        if (saved == null) {
+          applyWorkbenchMetaCollapsed(true, { persist: false });
+          return;
+        }
+        applyWorkbenchMetaCollapsed(saved !== '0', { persist: false });
+      } catch (error) {
+        console.warn('restore meta panel state failed', error);
+        applyWorkbenchMetaCollapsed(true, { persist: false });
+      }
+    }
+
+    function setupWorkbenchResultSplitter() {
+      const splitter = document.getElementById('workbenchResultSplitter');
+      if (!splitter) return;
+      restoreWorkbenchResultHeight();
+      splitter.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        const startY = event.clientY;
+        const startHeight = currentWorkbenchResultHeight();
+        splitter.classList.add('dragging');
+        document.body.classList.add('result-resizing');
+        const onMove = (moveEvent) => {
+          const delta = startY - moveEvent.clientY;
+          applyWorkbenchResultHeight(startHeight + delta, { persist: false });
+        };
+        const onUp = () => {
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+          splitter.classList.remove('dragging');
+          document.body.classList.remove('result-resizing');
+          applyWorkbenchResultHeight(currentWorkbenchResultHeight());
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+      });
+      splitter.addEventListener('dblclick', () => {
+        try {
+          localStorage.removeItem(WORKBENCH_RESULT_HEIGHT_KEY);
+        } catch (error) {
+          console.warn('reset workbench result height failed', error);
+        }
+        applyWorkbenchResultHeight(WORKBENCH_RESULT_DEFAULT);
+      });
+    }
+
+    function updateWorkbenchPager(result = null) {
+      const pageInfo = document.getElementById('workbenchPageInfo');
+      const prevBtn = document.getElementById('prevWorkbenchPageBtn');
+      const nextBtn = document.getElementById('nextWorkbenchPageBtn');
+      const pageSizeInput = document.getElementById('workbenchPageSize');
+      pageSizeInput.value = String(wbState.resultPageSize);
+      if (!result) {
+        pageInfo.textContent = '第 1 / 1 页';
+        prevBtn.disabled = true;
+        nextBtn.disabled = true;
+        return;
+      }
+      pageInfo.textContent = `第 ${result.page || 1} / ${result.total_pages || 1} 页`;
+      prevBtn.disabled = !result.has_prev;
+      nextBtn.disabled = !result.has_next;
+    }
+
+    function setMetaTab(tab) {
+      wbState.metaTab = tab === 'ddl' ? 'ddl' : 'fields';
+      const fieldsPanel = document.getElementById('metaFieldsPanel');
+      const ddlPanel = document.getElementById('metaDdlPanel');
+      const fieldsBtn = document.getElementById('metaFieldsTabBtn');
+      const ddlBtn = document.getElementById('metaDdlTabBtn');
+      fieldsPanel.classList.toggle('hidden', wbState.metaTab !== 'fields');
+      ddlPanel.classList.toggle('hidden', wbState.metaTab !== 'ddl');
+      fieldsBtn.classList.toggle('active', wbState.metaTab === 'fields');
+      ddlBtn.classList.toggle('active', wbState.metaTab === 'ddl');
+    }
+
+    function normalizeFolderPath(path) {
+      const value = String(path || '').trim();
+      return value || '个人查询';
+    }
+
+    function setSelectedFolder(path) {
+      wbState.selectedFolderPath = normalizeFolderPath(path);
+      wbState.selectedEntryPath = wbState.selectedFolderPath;
+      wbState.selectedEntryType = 'folder';
+      const hint = document.getElementById('treeSelectionHint');
+      if (hint) {
+        hint.textContent = `当前新建位置：${wbState.selectedFolderPath}`;
+      }
+    }
+
+    function setLinkedTableStatus(message, kind = '') {
+      const el = document.getElementById('linkedTableStatus');
+      if (!el) return;
+      el.textContent = message;
+      el.className = kind ? `status ${kind}` : 'status';
+    }
+
+    function refreshWorkbenchHeader(file) {
+      if (!file) {
+        document.getElementById('editorTitle').textContent = '未选择 SQL 文件';
+        document.getElementById('editorMeta').textContent = '从左侧打开或新建一个 SQL 文件开始。';
+        return;
+      }
+      document.getElementById('editorTitle').textContent = file.name;
+      document.getElementById('editorMeta').textContent = `文件路径：${file.path}${file.updated_at ? ` · 更新于 ${file.updated_at}` : ''}`;
+    }
+
+    function resetWorkbenchResult() {
+      document.getElementById('workbenchStatus').textContent = '';
+      document.getElementById('workbenchStatus').className = 'status';
+      document.getElementById('workbenchResultMeta').textContent = '尚未执行';
+      document.getElementById('workbenchResultWrap').innerHTML = '<div class="empty">执行后在这里查看结果</div>';
+      wbState.resultPage = 1;
+      wbState.resultColumns = [];
+      wbState.resultFilters = {};
+      wbState.lastRunResult = null;
+      closeWorkbenchFilterPopover();
+      syncWorkbenchPageSize(wbState.resultPageSize || 200);
+      renderResultNotices([]);
+      updateWorkbenchPager(null);
+    }
+
+    function setAiWorkbenchStatus(message, kind = '') {
+      const el = document.getElementById('aiWorkbenchStatus');
+      if (!el) return;
+      el.textContent = message;
+      el.className = kind ? `ai-status ${kind}` : 'ai-status';
+    }
+
+    function parseAiContextTablesInput(value) {
+      const raw = String(value || '');
+      const parts = raw.split(/[\n,，;；、]+/);
+      const seen = new Set();
+      const tables = [];
+      parts.forEach((item) => {
+        const qualified = String(item || '').trim();
+        if (!qualified || !qualified.includes('.')) return;
+        if (seen.has(qualified)) return;
+        seen.add(qualified);
+        tables.push(qualified);
+      });
+      return tables.slice(0, 6);
+    }
+
+    function syncAiManualContextTables() {
+      const input = document.getElementById('aiExtraContextTablesInput');
+      const tables = parseAiContextTablesInput(input?.value || '');
+      wbState.aiAssistant.manualContextTables = tables;
+      return tables;
+    }
+
+    function syncAiSearchModeUi() {
+      const linked = document.getElementById('linkedTableInput')?.value.trim() || '';
+      const promptEl = document.getElementById('aiWorkbenchPrompt');
+      const switchBtn = document.getElementById('switchAiTableSearchBtn');
+      if (promptEl) {
+        promptEl.placeholder = linked
+          ? '例如：按订单创建月份统计成交金额，并区分负责部门；再告诉我还应该补哪些筛选条件'
+          : '例如：我还没确定表，想看销售订单按月份的成交金额和负责人分布，先帮我找表';
+      }
+      if (switchBtn) {
+        switchBtn.textContent = linked ? '重新找表' : '当前已是找表模式';
+      }
+    }
+
+    function renderAiWorkbenchStage() {
+      const stageEl = document.getElementById('aiWorkbenchStage');
+      if (!stageEl) return;
+      const mode = wbState.aiAssistant.mode || 'idle';
+      const confirmedTables = wbState.aiAssistant.confirmedTables || [];
+      const guessedRelations = wbState.aiAssistant.guessedRelations || [];
+      if (mode === 'idle') {
+        stageEl.innerHTML = `
+          <div class="ai-stage-title">第一步：描述你要看什么数据</div>
+          <div class="ai-stage-copy">直接说业务问题即可。AI 会先找表，再让你确认关系，最后生成 SQL。</div>
+        `;
+        stageEl.classList.remove('hidden');
+        return;
+      }
+      if (mode === 'table_search') {
+        stageEl.innerHTML = `
+          <div class="ai-stage-title">第一步：先确认候选表</div>
+          <div class="ai-stage-copy">AI 会先根据你的业务问题找表。你可以直接点下面的候选表，也可以补充更具体的业务口径。</div>
+        `;
+        stageEl.classList.remove('hidden');
+        return;
+      }
+      if (mode === 'relation_confirm') {
+        stageEl.innerHTML = `
+          <div class="ai-stage-title">第二步：确认要用哪些表</div>
+          <div class="ai-stage-copy">本轮准备使用：${escapeHtml(confirmedTables.join('、') || '未识别')}。如果关系没问题，点“继续生成 SQL”；不对就换候选表或补充描述。</div>
+          ${guessedRelations.length ? `<div class="ai-rel-list">${guessedRelations.map((item) => `
+            <div class="ai-rel-item">
+              <div class="ai-rel-main">${escapeHtml(item.expression || '')}</div>
+              <div class="ai-rel-meta">
+                ${(item.reason ? `<span>${escapeHtml(item.reason)}</span>` : '')}
+                ${(item.confidence ? `<span>置信度：${escapeHtml(item.confidence)}</span>` : '')}
+              </div>
+            </div>
+          `).join('')}</div>` : '<div class="ai-stage-copy">暂时还没识别出明确关联键，生成 SQL 时会尽量保守处理，并在说明里提示你确认。</div>'}
+          <div class="ai-stage-actions">
+            <button type="button" class="btn-primary" id="continueAiGenerateBtn">继续生成 SQL</button>
+          </div>
+        `;
+        stageEl.classList.remove('hidden');
+        document.getElementById('continueAiGenerateBtn')?.addEventListener('click', async () => {
+          const latestUserPrompt = [...(wbState.aiAssistant.history || [])].reverse().find((row) => row.role === 'user')?.content || '';
+          await askAiWorkbench(latestUserPrompt || '继续生成 SQL', { forceGenerate: true, skipHistory: true });
+        });
+        return;
+      }
+      stageEl.innerHTML = `
+        <div class="ai-stage-title">第三步：生成 SQL</div>
+        <div class="ai-stage-copy">已确认表和关系。下面是当前可执行的 SQL，你可以直接写入编辑器或试跑。</div>
+      `;
+      stageEl.classList.remove('hidden');
+    }
+
+    function renderAiWorkbenchContext() {
+      const contextEl = document.getElementById('aiWorkbenchContext');
+      if (!contextEl) return;
+      const linked = document.getElementById('linkedTableInput').value.trim() || '未填写';
+      const manualTables = syncAiManualContextTables();
+      const sql = document.getElementById('workbenchSqlEditor').value.trim();
+      const sqlPreview = sql ? `${sql.split('\n').length} 行 SQL` : '当前编辑器为空';
+      const rows = wbState.lastRunResult?.rows?.length || 0;
+      const columns = wbState.lastRunResult?.columns?.length || 0;
+      const fieldCount = wbState.profile?.structure?.columns?.length || 0;
+      const ddlReady = wbState.profile?.ddl?.text ? '已加载' : '未加载';
+      const isTableSearchMode = linked === '未填写';
+      const contextTables = wbState.aiAssistant.contextTables || [];
+      contextEl.innerHTML = [
+        `当前模式：<b>${isTableSearchMode ? '找表模式' : '已绑定主表'}</b>`,
+        `关联表：<b>${escapeHtml(linked)}</b>`,
+        `手动补充表：${escapeHtml(manualTables.length ? manualTables.join('、') : '未填写')}`,
+        `AI 上下文表：${escapeHtml(contextTables.length ? contextTables.join('、') : linked)}`,
+        `当前 SQL：${escapeHtml(sqlPreview)}`,
+        `字段上下文：${escapeHtml(fieldCount)} 个字段`,
+        `DDL：${escapeHtml(ddlReady)}`,
+        `最近一次执行结果：${rows ? `${rows} 行 / ${columns} 列（已作为 AI 上下文）` : '还没有执行结果'}`,
+        `当前文件：${escapeHtml(wbState.currentFile?.path || '未保存到 SQL 文件')}`,
+      ].map((line) => `<div>${line}</div>`).join('');
+      renderAiWorkbenchStage();
+      syncAiSearchModeUi();
+    }
+
+    function renderAiWorkbenchThread() {
+      const threadEl = document.getElementById('aiWorkbenchThread');
+      if (!threadEl) return;
+      const history = wbState.aiAssistant.history || [];
+      if (!history.length) {
+        threadEl.innerHTML = '<div class="ai-empty">还没有对话。可以先问“帮我快速看这张表能分析什么”。</div>';
+        return;
+      }
+      threadEl.innerHTML = history.map((item) => `
+        <div class="ai-msg ${escapeHtml(item.role)}">
+          <div class="ai-role">${item.role === 'user' ? '你' : 'AI 助手'}</div>
+          <div class="ai-body">${escapeHtml(item.content || '')}</div>
+        </div>
+      `).join('');
+      threadEl.scrollTop = threadEl.scrollHeight;
+    }
+
+    function renderAiWorkbenchOutput() {
+      const sqlEl = document.getElementById('aiGeneratedSql');
+      const titleEl = document.getElementById('aiGeneratedSqlTitle');
+      const followEl = document.getElementById('aiWorkbenchFollowUps');
+      const candidateEl = document.getElementById('aiWorkbenchCandidates');
+      if (!sqlEl || !titleEl || !followEl || !candidateEl) return;
+      sqlEl.value = wbState.aiAssistant.generatedSql || '';
+      titleEl.textContent = wbState.aiAssistant.generatedTitle || 'AI 生成 SQL';
+      const followUps = wbState.aiAssistant.followUps || [];
+      const candidates = wbState.aiAssistant.tableCandidates || [];
+      if (!followUps.length) {
+        followEl.innerHTML = '';
+        followEl.classList.add('hidden');
+      } else {
+        followEl.innerHTML = `<div><b>下一步建议</b></div>${followUps.map((item) => `<div>• ${escapeHtml(item)}</div>`).join('')}`;
+        followEl.classList.remove('hidden');
+      }
+      if (!candidates.length) {
+        candidateEl.innerHTML = '';
+        candidateEl.classList.add('hidden');
+        return;
+      }
+      const mode = wbState.aiAssistant.mode || 'table_search';
+      candidateEl.innerHTML = `
+        <div><b>${mode === 'table_search' ? '候选表' : '可切换候选表'}</b></div>
+        ${candidates.map((item, index) => `
+          <button type="button" class="ai-candidate-item" data-ai-candidate-index="${index}">
+            <div class="ai-candidate-head">
+              <div class="ai-candidate-name">${escapeHtml(item.qualified_name || item.table_name || '未命名表')}</div>
+              <div class="ai-candidate-score">候选 ${index + 1}</div>
+            </div>
+            <div class="ai-candidate-sub">${escapeHtml(item.subtitle || item.table_comment || item.description || '暂无描述')}</div>
+            <div class="ai-candidate-meta">
+              ${(item.reason_text ? `<span>${escapeHtml(item.reason_text)}</span>` : '')}
+              ${(item.owner ? `<span>负责人：${escapeHtml(item.owner)}</span>` : '')}
+              ${(item.business_domain ? `<span>业务域：${escapeHtml(item.business_domain)}</span>` : '')}
+              ${(item.column_count ? `<span>${escapeHtml(item.column_count)} 个字段</span>` : '')}
+            </div>
+          </button>
+        `).join('')}
+      `;
+      candidateEl.classList.remove('hidden');
+      candidateEl.querySelectorAll('[data-ai-candidate-index]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const item = candidates[Number(btn.dataset.aiCandidateIndex)];
+          if (!item?.qualified_name) return;
+          await chooseAiCandidateTable(item);
+        });
+      });
+    }
+
+    function openAiWorkbenchModal() {
+      if (!wbState.aiAssistant.mode) {
+        wbState.aiAssistant.mode = 'idle';
+      }
+      renderAiWorkbenchContext();
+      renderAiWorkbenchThread();
+      renderAiWorkbenchOutput();
+      syncAiSearchModeUi();
+      setAiWorkbenchStatus('');
+      document.getElementById('aiWorkbenchModal').classList.remove('hidden');
+      window.setTimeout(() => document.getElementById('aiWorkbenchPrompt').focus(), 30);
+    }
+
+    function closeAiWorkbenchModal() {
+      document.getElementById('aiWorkbenchModal').classList.add('hidden');
+      setAiWorkbenchStatus('');
+    }
+
+    function clearAiWorkbenchConversation() {
+      wbState.aiAssistant.history = [];
+      wbState.aiAssistant.generatedSql = '';
+      wbState.aiAssistant.generatedTitle = '';
+      wbState.aiAssistant.followUps = [];
+      wbState.aiAssistant.tableCandidates = [];
+      wbState.aiAssistant.contextTables = [];
+      wbState.aiAssistant.confirmedTables = [];
+      wbState.aiAssistant.guessedRelations = [];
+      wbState.aiAssistant.mode = 'idle';
+      wbState.aiAssistant.needConfirmation = false;
+      wbState.aiAssistant.manualContextTables = [];
+      document.getElementById('aiWorkbenchPrompt').value = '';
+      document.getElementById('aiExtraContextTablesInput').value = '';
+      renderAiWorkbenchThread();
+      renderAiWorkbenchOutput();
+      renderAiWorkbenchContext();
+      setAiWorkbenchStatus('已清空对话', 'ok');
+    }
+
+    async function switchAiToTableSearchMode() {
+      const linkedInput = document.getElementById('linkedTableInput');
+      if (!linkedInput) return;
+      linkedInput.value = '';
+      await loadLinkedTableProfile('', { silent: true, reason: 'ai_table_search' });
+      wbState.aiAssistant.generatedSql = '';
+      wbState.aiAssistant.generatedTitle = '先选候选表';
+      wbState.aiAssistant.followUps = [];
+      wbState.aiAssistant.tableCandidates = [];
+      wbState.aiAssistant.contextTables = [];
+      wbState.aiAssistant.confirmedTables = [];
+      wbState.aiAssistant.guessedRelations = [];
+      wbState.aiAssistant.mode = 'table_search';
+      wbState.aiAssistant.needConfirmation = true;
+      wbState.aiAssistant.manualContextTables = [];
+      document.getElementById('aiExtraContextTablesInput').value = '';
+      renderAiWorkbenchContext();
+      renderAiWorkbenchOutput();
+      const prompt = document.getElementById('aiWorkbenchPrompt')?.value.trim() || '';
+      if (prompt) {
+        setAiWorkbenchStatus('已切到找表模式，正在根据当前问题找候选表…');
+        await askAiWorkbench(prompt);
+        return;
+      }
+      setAiWorkbenchStatus('已切到找表模式。描述业务问题后点击“发送问题”，我会先给你候选表。', 'ok');
+    }
+
+    async function chooseAiCandidateTable(item) {
+      const qualifiedName = String(item?.qualified_name || '').trim();
+      if (!qualifiedName) return;
+      const promptEl = document.getElementById('aiWorkbenchPrompt');
+      const latestUserPrompt = [...(wbState.aiAssistant.history || [])].reverse().find((row) => row.role === 'user')?.content || '';
+      document.getElementById('linkedTableInput').value = qualifiedName;
+      await loadLinkedTableProfile(qualifiedName);
+      wbState.aiAssistant.tableCandidates = [];
+      wbState.aiAssistant.mode = 'relation_confirm';
+      renderAiWorkbenchContext();
+      renderAiWorkbenchOutput();
+      setAiWorkbenchStatus(`已选中 ${qualifiedName}，正在重新确认表关系…`);
+      if (promptEl && !promptEl.value.trim() && latestUserPrompt) {
+        promptEl.value = latestUserPrompt;
+      }
+      await askAiWorkbench(promptEl?.value.trim() || latestUserPrompt, { skipHistory: true });
+    }
+
+    async function askAiWorkbench(promptOverride = '', options = {}) {
+      if (wbState.aiAssistant.pending) return;
+      const promptEl = document.getElementById('aiWorkbenchPrompt');
+      const prompt = String(promptOverride || promptEl.value || '').trim();
+      const manualTables = syncAiManualContextTables();
+      const linkedInput = document.getElementById('linkedTableInput');
+      let linked = linkedInput.value.trim();
+      if (!linked && manualTables.length) {
+        linked = manualTables[0];
+        linkedInput.value = linked;
+        await loadLinkedTableProfile(linked, { silent: true });
+        renderAiWorkbenchContext();
+      }
+      if (!prompt) {
+        setAiWorkbenchStatus('先输入你想让 AI 做什么。', 'error');
+        return;
+      }
+      const hasLinkedTable = linked && linked.includes('.');
+      const [schema, ...rest] = hasLinkedTable ? linked.split('.') : ['public'];
+      const table = hasLinkedTable ? rest.join('.') : '';
+      const extraContextTables = manualTables.filter((item) => item !== linked);
+      const forceGenerate = options.forceGenerate === true;
+      const skipHistory = options.skipHistory === true;
+      if (!skipHistory) {
+        wbState.aiAssistant.history.push({ role: 'user', content: prompt });
+      }
+      wbState.aiAssistant.pending = true;
+      renderAiWorkbenchThread();
+      const requestMode = forceGenerate ? 'sql_generate' : 'auto';
+      setAiWorkbenchStatus(hasLinkedTable ? 'AI 正在整理表关系和 SQL 上下文，请稍候…' : 'AI 正在根据你的问题先找候选表，请稍候…');
+      if (!skipHistory) {
+        promptEl.value = '';
+      }
+      try {
+        const payload = await fetchJson('/api/sql-workspace/assistant', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mode: requestMode,
+            schema,
+            table,
+            linked_table: linked,
+            extra_context_tables: extraContextTables,
+            prompt,
+            sql: document.getElementById('workbenchSqlEditor').value.trim(),
+            file_path: wbState.currentFile?.path || '',
+            conversation: wbState.aiAssistant.history,
+            result_preview: wbState.lastRunResult || null,
+          }),
+        });
+        if (payload.reply) {
+          wbState.aiAssistant.history.push({ role: 'assistant', content: payload.reply || 'AI 没有返回说明。' });
+        }
+        wbState.aiAssistant.generatedSql = payload.sql || '';
+        wbState.aiAssistant.generatedTitle = payload.title || 'AI 生成 SQL';
+        wbState.aiAssistant.followUps = Array.isArray(payload.follow_ups) ? payload.follow_ups : [];
+        wbState.aiAssistant.tableCandidates = Array.isArray(payload.table_candidates) ? payload.table_candidates : [];
+        wbState.aiAssistant.contextTables = Array.isArray(payload.context_tables) ? payload.context_tables : (hasLinkedTable ? [linked] : []);
+        wbState.aiAssistant.confirmedTables = Array.isArray(payload.confirmed_tables) ? payload.confirmed_tables : wbState.aiAssistant.contextTables;
+        wbState.aiAssistant.guessedRelations = Array.isArray(payload.guessed_relations) ? payload.guessed_relations : [];
+        wbState.aiAssistant.mode = payload.mode || 'sql_generate';
+        wbState.aiAssistant.needConfirmation = payload.need_confirmation === true;
+        renderAiWorkbenchThread();
+        renderAiWorkbenchContext();
+        renderAiWorkbenchOutput();
+        if (payload.mode === 'table_search') {
+          setAiWorkbenchStatus('已找到候选表，先确认范围再继续', 'ok');
+        } else if (payload.mode === 'relation_confirm') {
+          setAiWorkbenchStatus('已识别候选表和关系，确认后继续生成 SQL', 'ok');
+        } else if (payload.degraded) {
+          setAiWorkbenchStatus('已生成，当前为无 Key 降级模式', 'ok');
+        } else {
+          setAiWorkbenchStatus(payload.model ? `已生成，模型：${payload.model}` : '已生成', 'ok');
+        }
+      } catch (error) {
+        setAiWorkbenchStatus(error.message || 'AI 助手调用失败', 'error');
+      } finally {
+        wbState.aiAssistant.pending = false;
+      }
+    }
+
+    async function applyAiGeneratedSql(runAfterWrite = false) {
+      const sql = String(wbState.aiAssistant.generatedSql || '').trim();
+      if (!sql) {
+        setAiWorkbenchStatus('当前还没有可写入的 AI SQL。', 'error');
+        return;
+      }
+      document.getElementById('workbenchSqlEditor').value = sql;
+      document.getElementById('workbenchStatus').textContent = '已将 AI SQL 写入编辑器';
+      document.getElementById('workbenchStatus').className = 'status ok';
+      if (!runAfterWrite) {
+        setAiWorkbenchStatus('已写入编辑器', 'ok');
+        return;
+      }
+      closeAiWorkbenchModal();
+      await runCurrentSql(1);
+    }
+
+    function setNewSqlModalStatus(message, kind = '') {
+      const el = document.getElementById('newSqlModalStatus');
+      if (!el) return;
+      el.textContent = message;
+      el.className = kind ? `status ${kind}` : 'status';
+    }
+
+    function closeNewSqlModal() {
+      document.getElementById('newSqlModal').classList.add('hidden');
+      setNewSqlModalStatus('');
+    }
+
+    function openNewSqlModal() {
+      const folderPath = normalizeFolderPath(wbState.selectedFolderPath);
+      const linkedTable = document.getElementById('linkedTableInput').value.trim() || defaultLinkedTable();
+      document.getElementById('newSqlFileNameInput').value = '';
+      document.getElementById('newSqlFolderInput').value = folderPath;
+      document.getElementById('newSqlLinkedTableInput').value = linkedTable;
+      document.getElementById('newSqlLinkedTableInput').dataset.lastLinked = linkedTable;
+      document.getElementById('newSqlContentInput').value = defaultSqlForLinkedTable(linkedTable);
+      setNewSqlModalStatus('');
+      document.getElementById('newSqlModal').classList.remove('hidden');
+      window.setTimeout(() => document.getElementById('newSqlFileNameInput').focus(), 30);
+    }
+
+    async function ensureWorkbenchDraftFromLinkedTable() {
+      const linkedTable = defaultLinkedTable();
+      if (wbState.bootstrapDraftDone || !linkedTable || wbState.currentFilePath) return false;
+      wbState.bootstrapDraftDone = true;
+      const draftPath = `个人查询/${linkedTable.replaceAll('.', '_')}_草稿.sql`;
+      try {
+        const file = await fetchJson('/api/sql-workspace/file', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            create: true,
+            folder_path: '个人查询',
+            file_name: `${linkedTable.replaceAll('.', '_')}_草稿`,
+            content: defaultSqlForLinkedTable(linkedTable),
+            linked_table: linkedTable,
+          }),
+        });
+        wbState.currentFilePath = file.path;
+        wbState.currentFile = file;
+        setSelectedFolder(file.path.includes('/') ? file.path.slice(0, file.path.lastIndexOf('/')) : '个人查询');
+        return true;
+      } catch (error) {
+        if (!String(error.message || '').includes('已存在')) {
+          throw error;
+        }
+        wbState.currentFilePath = draftPath;
+        setSelectedFolder('个人查询');
+      }
+      return true;
+    }
+
+    async function renderWorkspaceTree(payload) {
+      wbState.tree = payload.tree;
+      document.getElementById('treeBody').innerHTML = renderTreeNode(payload.tree);
+      bindTreeEvents();
+    }
+
+    function bindTreeEvents() {
+      document.querySelectorAll('[data-file-path]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          wbState.selectedEntryPath = btn.dataset.filePath || '';
+          wbState.selectedEntryType = 'file';
+          openSqlFile(btn.dataset.filePath || '');
+        });
+      });
+      document.querySelectorAll('[data-folder-path]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          setSelectedFolder(btn.dataset.folderPath || '个人查询');
+          renderWorkspaceTree({ tree: wbState.tree || { type: 'folder', name: 'SQL 工作台', path: '', children: [] } });
+        });
+      });
+      document.querySelectorAll('[data-tree-menu-path]').forEach((btn) => {
+        btn.addEventListener('click', (event) => {
+          event.stopPropagation();
+          openTreeItemMenu(btn.dataset.treeMenuPath || '', btn.dataset.treeMenuType || '', btn);
+        });
+      });
+    }
+
+    async function loadWorkspaceTree() {
+      const payload = await fetchJson('/api/sql-workspace');
+      await renderWorkspaceTree(payload);
+      return payload;
+    }
+
+    async function loadWorkspace() {
+      await ensureWorkbenchDraftFromLinkedTable();
+      const payload = await loadWorkspaceTree();
+      const target = wbState.currentFilePath || payload.recent_files?.[0] || '';
+      if (target) {
+        await openSqlFile(target, { refreshTree: false });
+        return;
+      }
+      setSelectedFolder(defaultLinkedTable() ? '个人查询' : wbState.selectedFolderPath);
+      refreshWorkbenchHeader(null);
+      document.getElementById('linkedTableInput').value = defaultLinkedTable();
+      document.getElementById('workbenchSqlEditor').value = '';
+      resetWorkbenchResult();
+      await loadLinkedTableProfile(defaultLinkedTable(), { silent: true });
+    }
+
+    async function openSqlFile(path, options = {}) {
+      if (!path) return;
+      const refreshTree = options.refreshTree !== false;
+      const file = await fetchJson(`/api/sql-workspace/file?path=${encodeURIComponent(path)}`);
+      wbState.currentFilePath = file.path;
+      wbState.currentFile = file;
+      wbState.selectedEntryPath = file.path;
+      wbState.selectedEntryType = 'file';
+      setSelectedFolder(file.path.includes('/') ? file.path.slice(0, file.path.lastIndexOf('/')) : '个人查询');
+      refreshWorkbenchHeader(file);
+      document.getElementById('workbenchSqlEditor').value = file.content || '';
+      document.getElementById('linkedTableInput').value = file.linked_table || '';
+      resetWorkbenchResult();
+      if (refreshTree) {
+        await loadWorkspaceTree();
+      }
+      await loadLinkedTableProfile(file.linked_table || '', { silent: true });
+    }
+
+    async function loadLinkedTableProfile(qualifiedName, options = {}) {
+      const silent = options.silent === true;
+      const reason = String(options.reason || '').trim();
+      const listEl = document.getElementById('metaFieldList');
+      const ddlEl = document.getElementById('metaDdlWrap');
+      wbState.profile = null;
+      if (!qualifiedName || !qualifiedName.includes('.')) {
+        listEl.innerHTML = '<div class="empty">先填写或带入一个关联表，右侧才会显示字段清单。</div>';
+        ddlEl.innerHTML = '<div class="empty">先填写或带入一个关联表，这里才会显示建表 DDL。</div>';
+        setMetaTab('fields');
+        if (reason == 'ai_table_search') {
+          setLinkedTableStatus('已切到找表模式。发送业务问题后，AI 会先给你候选表。', 'ok');
+        } else {
+          setLinkedTableStatus('请先指定关联表，例如 public.sales_order。', 'error');
+        }
+        return;
+      }
+      const [schema, ...rest] = qualifiedName.split('.');
+      const table = rest.join('.');
+      try {
+        if (!silent) {
+          setLinkedTableStatus(`正在加载 ${qualifiedName} 的字段和 DDL…`);
+        }
+        const profile = await fetchJson(`/api/table-profile?schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(table)}&sample_limit=20`);
+        wbState.profile = profile;
+        renderMetaFields('');
+        ddlEl.innerHTML = profile.ddl?.text
+          ? `<pre class="wb-ddl-box">${escapeHtml(profile.ddl.text)}</pre>`
+          : '<div class="empty">当前表没有可用 DDL</div>';
+        setMetaTab(wbState.metaTab);
+        setLinkedTableStatus(`已加载 ${qualifiedName}，右侧可直接查看字段和 DDL。`, 'ok');
+        const collapsed = document.querySelector('.shell')?.classList.contains('meta-collapsed');
+        applyWorkbenchMetaCollapsed(Boolean(collapsed), { persist: false });
+      } catch (error) {
+        listEl.innerHTML = `<div class="error">${escapeHtml(error.message || '加载字段失败')}</div>`;
+        ddlEl.innerHTML = `<div class="error">${escapeHtml(error.message || '加载 DDL 失败')}</div>`;
+        setMetaTab('fields');
+        setLinkedTableStatus(error.message || '关联表加载失败', 'error');
+      }
+    }
+
+    function renderMetaFields(keyword) {
+      const listEl = document.getElementById('metaFieldList');
+      const columns = wbState.profile?.structure?.columns || [];
+      const needle = String(keyword || '').trim().toLowerCase();
+      const filtered = !needle ? columns : columns.filter((column) => {
+        const hay = [column.column_name, column.column_comment, column.business_def, column.udt_name, column.data_type].join(' ').toLowerCase();
+        return hay.includes(needle);
+      });
+      if (!filtered.length) {
+        listEl.innerHTML = '<div class="empty">没有匹配的字段</div>';
+        return;
+      }
+      listEl.innerHTML = filtered.map((column) => `
+        <button type="button" class="wb-field-item" data-insert-column="${escapeHtml(column.column_name)}">
+          <div class="wb-field-row"><span class="wb-field-name">${escapeHtml(column.column_name)}</span> <span class="wb-type-badge">${escapeHtml(column.udt_name || column.data_type || '')}</span></div>
+          <div class="wb-field-meta">${escapeHtml(column.column_comment || column.business_def || '暂无注释')}</div>
+        </button>
+      `).join('');
+      listEl.querySelectorAll('[data-insert-column]').forEach((btn) => {
+        btn.addEventListener('click', () => insertTextAtCursor(document.getElementById('workbenchSqlEditor'), btn.dataset.insertColumn || ''));
+      });
+    }
+
+    function insertTextAtCursor(textarea, text) {
+      if (!textarea) return;
+      const start = textarea.selectionStart ?? textarea.value.length;
+      const end = textarea.selectionEnd ?? textarea.value.length;
+      const before = textarea.value.slice(0, start);
+      const after = textarea.value.slice(end);
+      textarea.value = `${before}${text}${after}`;
+      const next = start + text.length;
+      textarea.focus();
+      textarea.setSelectionRange(next, next);
+    }
+
+    async function saveCurrentSqlFile() {
+      if (!wbState.currentFilePath) {
+        document.getElementById('workbenchStatus').textContent = '请先从左侧新建或打开一个 SQL 文件';
+        document.getElementById('workbenchStatus').className = 'status error';
+        return;
+      }
+      const payload = await fetchJson('/api/sql-workspace/file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          path: wbState.currentFilePath,
+          content: document.getElementById('workbenchSqlEditor').value,
+          linked_table: document.getElementById('linkedTableInput').value.trim(),
+        }),
+      });
+      wbState.currentFile = payload;
+      document.getElementById('workbenchStatus').textContent = '已保存';
+      document.getElementById('workbenchStatus').className = 'status ok';
+      refreshWorkbenchHeader(payload);
+      await loadWorkspaceTree();
+      await loadLinkedTableProfile(payload.linked_table || '');
+    }
+
+    async function runCurrentSql(page = 1) {
+      const linked = document.getElementById('linkedTableInput').value.trim();
+      if (!linked || !linked.includes('.')) {
+        document.getElementById('workbenchStatus').textContent = '请先填写关联表，例如 public.sales_order';
+        document.getElementById('workbenchStatus').className = 'status error';
+        return;
+      }
+      const [schema, ...rest] = linked.split('.');
+      const table = rest.join('.');
+      const sql = document.getElementById('workbenchSqlEditor').value.trim();
+      const pageSizeInput = document.getElementById('workbenchPageSize');
+      const rowLimitInput = document.getElementById('workbenchRowLimit');
+      const pageSize = syncWorkbenchPageSize(pageSizeInput.value || rowLimitInput.value || wbState.resultPageSize || 200);
+      const rowLimit = pageSize;
+      const columnFilters = currentWorkbenchColumnFilters();
+      wbState.resultPage = Math.max(1, Number(page || 1));
+      const requestId = ++wbState.runRequestId;
+      document.getElementById('workbenchStatus').textContent = '正在执行查询…';
+      document.getElementById('workbenchStatus').className = 'status';
+      document.getElementById('workbenchResultWrap').innerHTML = '<div class="empty">正在执行，请稍候…</div>';
+      renderResultNotices([]);
+      closeWorkbenchFilterPopover();
+      try {
+        const result = await fetchJson('/api/sql-workspace/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            schema,
+            table,
+            sql,
+            row_limit: rowLimit,
+            page: wbState.resultPage,
+            page_size: pageSize,
+            column_filters: columnFilters,
+          }),
+        });
+        if (requestId !== wbState.runRequestId) return;
+        wbState.resultPage = result.page || 1;
+        wbState.resultColumns = result.columns || [];
+        wbState.resultFilters = result.filter?.values || {};
+        wbState.lastRunResult = {
+          columns: result.columns || [],
+          rows: result.rows || [],
+          row_count: result.row_count || 0,
+          total_count: result.total_count || 0,
+          notices: result.notices || [],
+        };
+        const filterText = result.filter?.applied
+          ? `；已筛 <b>${escapeHtml(result.filter.count || 0)}</b> 个字段`
+          : '';
+        document.getElementById('workbenchResultMeta').innerHTML = `关联表 <b>${escapeHtml(linked)}</b>；执行库 <b>${escapeHtml(result.resolved_schema || linked.split('.')[0] || '')}</b>；共 <b>${escapeHtml(result.total_count || 0)}</b> 行；当前第 <b>${escapeHtml(result.page || 1)}</b> / <b>${escapeHtml(result.total_pages || 1)}</b> 页；本页返回 <b>${escapeHtml(result.row_count || 0)}</b> 行；方言 <b>${escapeHtml(result.dialect || '')}</b>${filterText}`;
+        document.getElementById('workbenchResultWrap').innerHTML = renderResultTable(result);
+        bindWorkbenchHeaderFilters();
+        renderResultNotices(result.notices || []);
+        updateWorkbenchPager(result);
+        document.getElementById('workbenchStatus').textContent = '执行完成';
+        document.getElementById('workbenchStatus').className = 'status ok';
+      } catch (error) {
+        if (requestId !== wbState.runRequestId) return;
+        wbState.lastRunResult = null;
+        document.getElementById('workbenchResultMeta').textContent = '执行失败';
+        document.getElementById('workbenchResultWrap').innerHTML = `<div class="error">${escapeHtml(error.message || '执行失败')}</div>`;
+        renderResultNotices([]);
+        updateWorkbenchPager(null);
+        document.getElementById('workbenchStatus').textContent = error.message || '执行失败';
+        document.getElementById('workbenchStatus').className = 'status error';
+      }
+    }
+
+    function positionWorkbenchFilterPopover() {
+      const popover = document.getElementById('workbenchFilterPopover');
+      const anchor = wbState.filterPopover.anchor;
+      if (!popover || !anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      const width = Math.min(280, window.innerWidth - 24);
+      let left = rect.right - width;
+      if (left < 12) left = 12;
+      if (left + width > window.innerWidth - 12) {
+        left = Math.max(12, window.innerWidth - width - 12);
+      }
+      const top = Math.min(rect.bottom + 8, window.innerHeight - 440);
+      popover.style.left = `${Math.max(12, left)}px`;
+      popover.style.top = `${Math.max(12, top)}px`;
+    }
+
+    function closeWorkbenchFilterPopover() {
+      const popover = document.getElementById('workbenchFilterPopover');
+      if (!popover) return;
+      if (wbState.filterPopover.searchTimer) {
+        window.clearTimeout(wbState.filterPopover.searchTimer);
+      }
+      popover.classList.add('hidden');
+      wbState.filterPopover = {
+        column: '',
+        options: [],
+        filteredOptions: [],
+        draftValues: [],
+        anchor: null,
+        requestId: 0,
+        keyword: '',
+        searchTimer: null,
+      };
+    }
+
+    function renderWorkbenchFilterPopoverOptions() {
+      const body = document.getElementById('workbenchFilterPopoverBody');
+      if (!body) return;
+      const column = wbState.filterPopover.column;
+      const draftSet = new Set(wbState.filterPopover.draftValues || []);
+      const options = wbState.filterPopover.filteredOptions || [];
+      if (!options.length) {
+        body.innerHTML = '<div class="filter-popover-empty">没有匹配的候选值</div>';
+        return;
+      }
+      body.innerHTML = options.map((option, index) => `
+        <label class="filter-popover-option">
+          <input type="checkbox" data-filter-option-index="${index}" ${draftSet.has(String(option.value)) ? 'checked' : ''} />
+          <span class="label" title="${escapeHtml(option.label)}">${escapeHtml(option.label)}</span>
+          <span class="count">${escapeHtml(option.count)}</span>
+        </label>
+      `).join('');
+      body.querySelectorAll('[data-filter-option-index]').forEach((input) => {
+        input.addEventListener('change', (event) => {
+          const option = options[Number(event.target.dataset.filterOptionIndex)];
+          if (!option) return;
+          const next = new Set(wbState.filterPopover.draftValues || []);
+          if (event.target.checked) {
+            next.add(String(option.value));
+          } else {
+            next.delete(String(option.value));
+          }
+          wbState.filterPopover.draftValues = Array.from(next);
+        });
+      });
+    }
+
+    async function loadWorkbenchFilterOptions(keyword = '') {
+      const column = wbState.filterPopover.column;
+      if (!column) return;
+      const linked = document.getElementById('linkedTableInput').value.trim();
+      if (!linked || !linked.includes('.')) return;
+      const [schema, ...rest] = linked.split('.');
+      const table = rest.join('.');
+      const sql = document.getElementById('workbenchSqlEditor').value.trim();
+      const bodyEl = document.getElementById('workbenchFilterPopoverBody');
+      const requestId = (wbState.filterPopover.requestId || 0) + 1;
+      wbState.filterPopover.requestId = requestId;
+      wbState.filterPopover.keyword = String(keyword || '');
+      bodyEl.innerHTML = '<div class="filter-popover-empty">正在加载候选值…</div>';
+      try {
+        const payload = await fetchJson('/api/sql-workspace/filter-options', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            schema,
+            table,
+            sql,
+            column,
+            keyword: wbState.filterPopover.keyword,
+            column_filters: currentWorkbenchColumnFilters(),
+          }),
+        });
+        if (wbState.filterPopover.column !== column || wbState.filterPopover.requestId !== requestId) return;
+        wbState.filterPopover.options = payload.options || [];
+        wbState.filterPopover.filteredOptions = payload.options || [];
+        wbState.filterPopover.draftValues = [...(payload.active_values || wbState.filterPopover.draftValues || [])];
+        renderWorkbenchFilterPopoverOptions();
+        positionWorkbenchFilterPopover();
+      } catch (error) {
+        if (wbState.filterPopover.column !== column || wbState.filterPopover.requestId !== requestId) return;
+        bodyEl.innerHTML = `<div class="filter-popover-empty">${escapeHtml(error.message || '加载候选值失败')}</div>`;
+      }
+    }
+
+    async function openWorkbenchFilterPopover(column, anchor) {
+      if (!column || !anchor) return;
+      const popover = document.getElementById('workbenchFilterPopover');
+      const titleEl = document.getElementById('workbenchFilterPopoverTitle');
+      const subEl = document.getElementById('workbenchFilterPopoverSub');
+      const searchEl = document.getElementById('workbenchFilterPopoverSearch');
+      const bodyEl = document.getElementById('workbenchFilterPopoverBody');
+      wbState.filterPopover = {
+        column,
+        options: [],
+        filteredOptions: [],
+        draftValues: [...(wbState.resultFilters[column] || [])],
+        anchor,
+        requestId: 0,
+        keyword: '',
+        searchTimer: null,
+      };
+      titleEl.textContent = `筛选 ${column}`;
+      subEl.textContent = '勾选要保留的值，输入关键字会到全量候选值里搜索';
+      searchEl.value = '';
+      bodyEl.innerHTML = '<div class="filter-popover-empty">正在加载候选值…</div>';
+      popover.classList.remove('hidden');
+      positionWorkbenchFilterPopover();
+      await loadWorkbenchFilterOptions('');
+    }
+
+    function applyWorkbenchFilterPopover() {
+      const column = wbState.filterPopover.column;
+      if (!column) return;
+      const next = currentWorkbenchColumnFilters();
+      const values = normalizeWorkbenchFilterValues(wbState.filterPopover.draftValues || []);
+      if (values.length) {
+        next[column] = values;
+      } else {
+        delete next[column];
+      }
+      wbState.resultFilters = next;
+      closeWorkbenchFilterPopover();
+      runCurrentSql(1);
+    }
+
+    function clearWorkbenchFilterPopoverColumn() {
+      const column = wbState.filterPopover.column;
+      if (!column) return;
+      wbState.filterPopover.draftValues = [];
+      const next = currentWorkbenchColumnFilters();
+      delete next[column];
+      wbState.resultFilters = next;
+      closeWorkbenchFilterPopover();
+      runCurrentSql(1);
+    }
+
+    function bindWorkbenchHeaderFilters() {
+      document.querySelectorAll('[data-filter-column]').forEach((btn) => {
+        btn.addEventListener('click', async (event) => {
+          event.stopPropagation();
+          const column = btn.dataset.filterColumn || '';
+          if (wbState.filterPopover.column === column && !document.getElementById('workbenchFilterPopover').classList.contains('hidden')) {
+            closeWorkbenchFilterPopover();
+            return;
+          }
+          await openWorkbenchFilterPopover(column, btn);
+        });
+      });
+    }
+
+    async function createFolder() {
+      const value = window.prompt('请输入文件夹名称');
+      if (!value) return;
+      const base = wbState.selectedFolderPath && wbState.selectedFolderPath !== 'SQL 工作台' ? wbState.selectedFolderPath : '';
+      const nextPath = [base, value.trim()].filter(Boolean).join('/');
+      await fetchJson('/api/sql-workspace/folder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: nextPath }),
+      });
+      setSelectedFolder(nextPath);
+      await loadWorkspaceTree();
+    }
+
+    async function createSqlFile() {
+      const fileName = document.getElementById('newSqlFileNameInput').value.trim();
+      const folderPath = normalizeFolderPath(document.getElementById('newSqlFolderInput').value);
+      const linkedTable = document.getElementById('newSqlLinkedTableInput').value.trim();
+      const defaultSql = document.getElementById('newSqlContentInput').value;
+      if (!fileName) {
+        setNewSqlModalStatus('请先填写 SQL 文件名', 'error');
+        return;
+      }
+      const file = await fetchJson('/api/sql-workspace/file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          create: true,
+          folder_path: folderPath,
+          file_name: fileName.trim(),
+          content: defaultSql,
+          linked_table: linkedTable,
+        }),
+      });
+      wbState.currentFilePath = file.path;
+      wbState.selectedEntryPath = file.path;
+      wbState.selectedEntryType = 'file';
+      closeNewSqlModal();
+      await openSqlFile(file.path);
+    }
+
+    function flattenWorkspaceFolders(node, target = []) {
+      if (!node) return target;
+      if (node.type === 'folder') {
+        target.push(node.path || '');
+        (node.children || []).forEach((child) => flattenWorkspaceFolders(child, target));
+      }
+      return target;
+    }
+
+    function closeTreeItemMenu() {
+      const menu = document.getElementById('treeItemMenu');
+      if (!menu) return;
+      menu.classList.add('hidden');
+      wbState.treeMenu = { path: '', type: '', anchor: null };
+    }
+
+    function positionTreeItemMenu() {
+      const menu = document.getElementById('treeItemMenu');
+      const anchor = wbState.treeMenu.anchor;
+      if (!menu || !anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      let left = rect.right - 148;
+      if (left < 12) left = 12;
+      if (left + 148 > window.innerWidth - 12) {
+        left = Math.max(12, window.innerWidth - 160);
+      }
+      let top = rect.bottom + 6;
+      if (top + 132 > window.innerHeight - 12) {
+        top = Math.max(12, rect.top - 132);
+      }
+      menu.style.left = `${left}px`;
+      menu.style.top = `${top}px`;
+    }
+
+    function openTreeItemMenu(path, type, anchor) {
+      wbState.treeMenu = { path, type, anchor };
+      const menu = document.getElementById('treeItemMenu');
+      menu.classList.remove('hidden');
+      positionTreeItemMenu();
+    }
+
+    async function renameTreeItem() {
+      const path = wbState.treeMenu.path;
+      if (!path) return;
+      const currentName = path.split('/').pop() || '';
+      const nextName = window.prompt('请输入新名称', currentName);
+      closeTreeItemMenu();
+      if (!nextName || nextName.trim() === currentName) return;
+      const payload = await fetchJson('/api/sql-workspace/rename', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path, new_name: nextName.trim() }),
+      });
+      await handleWorkspaceMutationPayload(payload);
+    }
+
+    async function moveTreeItem() {
+      const path = wbState.treeMenu.path;
+      if (!path) return;
+      const folders = flattenWorkspaceFolders(wbState.tree || {}).filter((item) => item !== path && !item.startsWith(`${path}/`));
+      const currentFolder = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+      const suggested = currentFolder || '个人查询';
+      const nextFolder = window.prompt(`请输入目标目录，可选：${folders.map((item) => item || '根目录').join('、')}`, suggested);
+      closeTreeItemMenu();
+      if (nextFolder == null) return;
+      const folderPath = String(nextFolder).trim();
+      const payload = await fetchJson('/api/sql-workspace/move', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path, target_folder_path: folderPath }),
+      });
+      await handleWorkspaceMutationPayload(payload);
+    }
+
+    async function deleteTreeItem() {
+      const path = wbState.treeMenu.path;
+      const type = wbState.treeMenu.type;
+      if (!path) return;
+      const name = path.split('/').pop() || path;
+      closeTreeItemMenu();
+      const ok = window.confirm(`确定删除${type === 'folder' ? '文件夹' : '文件'}“${name}”吗？${type === 'folder' ? ' 文件夹下内容也会一起删除。' : ''}`);
+      if (!ok) return;
+      const payload = await fetchJson('/api/sql-workspace/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      });
+      await handleWorkspaceMutationPayload(payload);
+    }
+
+    async function handleWorkspaceMutationPayload(payload) {
+      if (payload?.workspace?.tree) {
+        wbState.tree = payload.workspace.tree;
+        await renderWorkspaceTree(payload.workspace);
+      } else {
+        await loadWorkspaceTree();
+      }
+      if (payload?.entry_type === 'file' && payload?.file) {
+        wbState.currentFilePath = payload.file.path;
+        wbState.currentFile = payload.file;
+        wbState.selectedEntryPath = payload.file.path;
+        wbState.selectedEntryType = 'file';
+        refreshWorkbenchHeader(payload.file);
+        document.getElementById('workbenchSqlEditor').value = payload.file.content || '';
+        document.getElementById('linkedTableInput').value = payload.file.linked_table || '';
+        await loadLinkedTableProfile(payload.file.linked_table || '', { silent: true });
+        return;
+      }
+      if (payload?.action === 'delete' && payload?.old_path === wbState.currentFilePath) {
+        wbState.currentFilePath = '';
+        wbState.currentFile = null;
+        refreshWorkbenchHeader(null);
+        document.getElementById('workbenchSqlEditor').value = '';
+        document.getElementById('linkedTableInput').value = '';
+        resetWorkbenchResult();
+        await loadLinkedTableProfile('', { silent: true });
+        return;
+      }
+      if (payload?.entry_type === 'folder' && payload?.new_path) {
+        setSelectedFolder(payload.new_path);
+      }
+      if (payload?.action === 'delete' && payload?.entry_type === 'folder') {
+        setSelectedFolder('个人查询');
+      }
+    }
+
+    document.getElementById('newFolderBtn').addEventListener('click', createFolder);
+    document.getElementById('renameTreeItemBtn').addEventListener('click', renameTreeItem);
+    document.getElementById('moveTreeItemBtn').addEventListener('click', moveTreeItem);
+    document.getElementById('deleteTreeItemBtn').addEventListener('click', deleteTreeItem);
+    document.getElementById('metaFieldsTabBtn').addEventListener('click', () => setMetaTab('fields'));
+    document.getElementById('metaDdlTabBtn').addEventListener('click', () => setMetaTab('ddl'));
+    document.getElementById('newSqlFileBtn').addEventListener('click', openNewSqlModal);
+    document.getElementById('cancelNewSqlBtn').addEventListener('click', closeNewSqlModal);
+    document.getElementById('confirmNewSqlBtn').addEventListener('click', async () => {
+      try {
+        await createSqlFile();
+      } catch (error) {
+        setNewSqlModalStatus(error.message || '创建 SQL 文件失败', 'error');
+      }
+    });
+    document.getElementById('newSqlLinkedTableInput').addEventListener('change', (event) => {
+      const linked = event.target.value.trim();
+      const editor = document.getElementById('newSqlContentInput');
+      const currentLinked = document.getElementById('newSqlLinkedTableInput').dataset.lastLinked || '';
+      const oldTemplate = defaultSqlForLinkedTable(currentLinked);
+      if (!editor.value.trim() || editor.value === oldTemplate) {
+        editor.value = defaultSqlForLinkedTable(linked);
+      }
+      document.getElementById('newSqlLinkedTableInput').dataset.lastLinked = linked;
+    });
+    document.getElementById('newSqlModal').addEventListener('click', (event) => {
+      if (event.target && event.target.id === 'newSqlModal') {
+        closeNewSqlModal();
+      }
+    });
+    document.getElementById('aiWorkbenchModal').addEventListener('click', (event) => {
+      if (event.target && event.target.id === 'aiWorkbenchModal') {
+        closeAiWorkbenchModal();
+      }
+    });
+    document.getElementById('openAiWorkbenchBtn').addEventListener('click', openAiWorkbenchModal);
+    document.getElementById('closeAiWorkbenchBtn').addEventListener('click', closeAiWorkbenchModal);
+    document.getElementById('clearAiWorkbenchBtn').addEventListener('click', clearAiWorkbenchConversation);
+    document.getElementById('switchAiTableSearchBtn').addEventListener('click', async () => {
+      await switchAiToTableSearchMode();
+    });
+    document.getElementById('sendAiWorkbenchBtn').addEventListener('click', () => askAiWorkbench());
+    document.getElementById('insertAiSqlBtn').addEventListener('click', async () => {
+      await applyAiGeneratedSql(false);
+    });
+    document.getElementById('runAiSqlBtn').addEventListener('click', async () => {
+      await applyAiGeneratedSql(true);
+    });
+    document.querySelectorAll('[data-ai-prompt]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const prompt = btn.dataset.aiPrompt || '';
+        document.getElementById('aiWorkbenchPrompt').value = prompt;
+        await askAiWorkbench(prompt);
+      });
+    });
+    document.getElementById('aiWorkbenchPrompt').addEventListener('keydown', async (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+        event.preventDefault();
+        await askAiWorkbench();
+      }
+    });
+    document.getElementById('saveWorkbenchSqlBtn').addEventListener('click', saveCurrentSqlFile);
+    document.getElementById('saveAsDatasetBtn').addEventListener('click', async () => {
+      const sql = document.getElementById('workbenchSqlEditor').value.trim();
+      const linked = document.getElementById('linkedTableInput').value.trim();
+      if (!sql && !linked) {
+        document.getElementById('workbenchStatus').textContent = '请先选择关联表或输入 SQL 再保存为数据集';
+        document.getElementById('workbenchStatus').className = 'status error';
+        return;
+      }
+      const name = window.prompt('请输入数据集名称');
+      if (!name) return;
+      const sourceType = sql ? 'sql' : 'table';
+      const sourceRef = sourceType === 'sql' ? (wbState.currentFilePath || '') : linked;
+      try {
+        const payload = await fetchJson('/api/datasets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name,
+            source_type: sourceType,
+            source_ref: sourceRef,
+            datasource_key: linked.split('.')[0] || '',
+            linked_table: linked,
+            description: sourceType === 'sql' ? '由 SQL 工作台沉淀' : '由关联表沉淀',
+          }),
+        });
+        document.getElementById('workbenchStatus').textContent = `已创建数据集 ${payload.name || payload.id}`;
+        document.getElementById('workbenchStatus').className = 'status ok';
+      } catch (error) {
+        document.getElementById('workbenchStatus').textContent = error.message || '保存数据集失败';
+        document.getElementById('workbenchStatus').className = 'status error';
+      }
+    });
+    document.getElementById('runWorkbenchSqlBtn').addEventListener('click', () => runCurrentSql(1));
+    document.getElementById('prevWorkbenchPageBtn').addEventListener('click', () => runCurrentSql(Math.max(1, wbState.resultPage - 1)));
+    document.getElementById('nextWorkbenchPageBtn').addEventListener('click', () => runCurrentSql(wbState.resultPage + 1));
+    document.getElementById('workbenchRowLimit').addEventListener('change', (event) => {
+      syncWorkbenchPageSize(event.target.value, 'rowLimit');
+    });
+    document.getElementById('workbenchPageSize').addEventListener('change', (event) => {
+      syncWorkbenchPageSize(event.target.value, 'pageSize');
+      runCurrentSql(1);
+    });
+    document.getElementById('applyWorkbenchFilterBtn').addEventListener('click', () => runCurrentSql(1));
+    document.getElementById('clearWorkbenchFilterBtn').addEventListener('click', () => {
+      wbState.resultFilters = {};
+      closeWorkbenchFilterPopover();
+      runCurrentSql(1);
+    });
+    document.getElementById('workbenchFilterPopoverApplyBtn').addEventListener('click', applyWorkbenchFilterPopover);
+    document.getElementById('workbenchFilterPopoverClearBtn').addEventListener('click', clearWorkbenchFilterPopoverColumn);
+    document.getElementById('workbenchFilterPopoverSearch').addEventListener('input', (event) => {
+      const keyword = String(event.target.value || '');
+      if (wbState.filterPopover.searchTimer) {
+        window.clearTimeout(wbState.filterPopover.searchTimer);
+      }
+      wbState.filterPopover.searchTimer = window.setTimeout(() => {
+        loadWorkbenchFilterOptions(keyword);
+      }, 180);
+    });
+    document.addEventListener('click', (event) => {
+      const popover = document.getElementById('workbenchFilterPopover');
+      if (popover.classList.contains('hidden')) return;
+      const target = event.target;
+      if (popover.contains(target)) return;
+      if (target.closest('[data-filter-column]')) return;
+      closeWorkbenchFilterPopover();
+    });
+    document.addEventListener('click', (event) => {
+      const menu = document.getElementById('treeItemMenu');
+      if (menu.classList.contains('hidden')) return;
+      const target = event.target;
+      if (menu.contains(target)) return;
+      if (target.closest('[data-tree-menu-path]')) return;
+      closeTreeItemMenu();
+    });
+    window.addEventListener('resize', positionWorkbenchFilterPopover);
+    window.addEventListener('scroll', positionWorkbenchFilterPopover, true);
+    window.addEventListener('resize', positionTreeItemMenu);
+    window.addEventListener('scroll', positionTreeItemMenu, true);
+    window.addEventListener('resize', syncWorkbenchResultHeightToViewport);
+    document.getElementById('applyLinkedTableBtn').addEventListener('click', async () => {
+      await loadLinkedTableProfile(document.getElementById('linkedTableInput').value.trim());
+    });
+    document.getElementById('toggleMetaPanelBtn').addEventListener('click', () => {
+      const shell = document.querySelector('.shell');
+      const isCollapsed = shell?.classList.contains('meta-collapsed');
+      applyWorkbenchMetaCollapsed(!isCollapsed);
+    });
+    document.getElementById('collapseMetaPanelBtn').addEventListener('click', () => {
+      applyWorkbenchMetaCollapsed(true);
+    });
+    document.getElementById('metaFieldSearch').addEventListener('input', (event) => renderMetaFields(event.target.value));
+    document.getElementById('linkedTableInput').addEventListener('change', async (event) => {
+      await loadLinkedTableProfile(event.target.value.trim());
+    });
+    document.getElementById('aiExtraContextTablesInput').addEventListener('input', () => {
+      syncAiManualContextTables();
+      renderAiWorkbenchContext();
+    });
+    document.getElementById('openFromTableBtn').addEventListener('click', () => {
+      const linked = document.getElementById('linkedTableInput').value.trim();
+      if (linked && linked.includes('.')) {
+        const [schema, ...rest] = linked.split('.');
+        const table = rest.join('.');
+        window.location.href = `/map?schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(table)}`;
+        return;
+      }
+      window.location.href = '/map';
+    });
+    document.getElementById('openDatasetsFromWorkbenchBtn').addEventListener('click', () => {
+      window.location.href = '/datasets';
+    });
+    document.getElementById('openDashboardsFromWorkbenchBtn').addEventListener('click', () => {
+      window.location.href = '/dashboards';
+    });
+
+    setupWorkbenchResultSplitter();
+    restoreWorkbenchMetaCollapsed();
+    setMetaTab('fields');
+
+    loadWorkspace().catch((error) => {
+      document.getElementById('treeBody').innerHTML = `<div class="error">${escapeHtml(error.message || '加载工作台失败')}</div>`;
+    });
+  </script>
+</body>
+</html>

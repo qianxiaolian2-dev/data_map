@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>看板中心</title>
+  <style>
+    :root { --bg:#eef1f5; --surface:#fff; --surface-soft:#f8fafc; --ink:#111827; --muted:#6b7280; --line:#dbe2ea; --brand:#1a73e8; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Helvetica Neue",sans-serif; font-size:13px; color:var(--ink); background:var(--bg); min-height:100vh; }
+    button,input,select { font:inherit; }
+    .page { min-height:100vh; display:grid; grid-template-rows:48px auto minmax(0,1fr); }
+    .topbar { display:flex; align-items:center; justify-content:space-between; gap:12px; background:#111827; color:#fff; padding:0 18px; }
+    .brand { display:flex; align-items:center; gap:8px; font-weight:700; }
+    .dot { width:8px; height:8px; border-radius:999px; background:#1a73e8; }
+    .topbar-actions { display:flex; align-items:center; gap:8px; }
+    .topbar-btn { height:30px; padding:0 12px; border:1px solid rgba(255,255,255,0.14); border-radius:8px; background:rgba(255,255,255,0.08); color:rgba(255,255,255,0.92); cursor:pointer; }
+    .hero { padding:18px 22px 10px; display:grid; gap:12px; }
+    .hero-title { font-size:24px; font-weight:800; }
+    .hero-sub { color:var(--muted); line-height:1.7; }
+    .hero-actions { display:flex; gap:10px; flex-wrap:wrap; }
+    .btn-primary,.btn-ghost { height:34px; padding:0 14px; border-radius:10px; cursor:pointer; }
+    .btn-primary { border:0; background:var(--brand); color:#fff; font-weight:600; }
+    .btn-ghost { border:1px solid var(--line); background:#fff; color:var(--muted); }
+    .content { padding:0 22px 22px; display:grid; gap:14px; }
+    .toolbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .toolbar input, .toolbar select { height:36px; border:1px solid var(--line); border-radius:10px; background:#fff; padding:0 12px; }
+    .toolbar input { min-width:260px; flex:1; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px; }
+    .card { border:1px solid var(--line); border-radius:14px; background:#fff; padding:16px; display:grid; gap:10px; box-shadow:0 8px 24px rgba(15,23,42,0.04); }
+    .card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+    .card-title { font-size:15px; font-weight:700; }
+    .badge { display:inline-flex; align-items:center; padding:2px 8px; border-radius:999px; font-size:11px; border:1px solid rgba(26,115,232,0.16); background:rgba(26,115,232,0.08); color:var(--brand); }
+    .meta { display:flex; gap:8px; flex-wrap:wrap; color:var(--muted); font-size:12px; }
+    .meta span { display:inline-flex; align-items:center; padding:2px 8px; border-radius:999px; background:var(--surface-soft); }
+    .desc { color:var(--muted); line-height:1.6; min-height:38px; }
+    .card-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .empty { padding:28px; border:1px dashed var(--line); border-radius:14px; background:var(--surface-soft); color:var(--muted); text-align:center; }
+    .status { min-height:18px; color:var(--muted); font-size:12px; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <div class="brand"><span class="dot"></span>看板中心</div>
+      <div class="topbar-actions">
+        <button class="topbar-btn" type="button" id="openMapBtn">数据地图</button>
+        <button class="topbar-btn" type="button" id="openWorkbenchBtn">SQL 工作台</button>
+        <button class="topbar-btn" type="button" id="openDatasetsBtn">数据集</button>
+      </div>
+    </header>
+    <section class="hero">
+      <div class="hero-title">看板</div>
+      <div class="hero-sub">第一版先提供模板化看板骨架。一个看板绑定一个主数据集，不做自由拖拽，先把视觉和结构做稳。</div>
+      <div class="hero-actions">
+        <button class="btn-primary" type="button" id="newDashboardBtn">新建看板</button>
+        <button class="btn-ghost" type="button" id="aiDraftBtn">AI 生成草稿</button>
+      </div>
+    </section>
+    <main class="content">
+      <div class="toolbar">
+        <input id="dashboardSearchInput" placeholder="搜索看板名称 / 描述 / 数据集" />
+        <select id="dashboardStatusFilter"><option value="">全部状态</option><option value="draft">草稿</option><option value="published">已发布</option></select>
+      </div>
+      <div id="dashboardStatus" class="status"></div>
+      <div id="dashboardGrid" class="grid"></div>
+    </main>
+  </div>
+  <script>
+    async function fetchJson(url, options = {}) {
+      const resp = await fetch(url, options);
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.error || `请求失败(${resp.status})`);
+      return data;
+    }
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function renderDashboards(items) {
+      const host = document.getElementById('dashboardGrid');
+      if (!items.length) {
+        host.innerHTML = '<div class="empty">还没有看板。可以先创建数据集，再新建一个模板化看板。</div>';
+        return;
+      }
+      host.innerHTML = items.map((item) => `
+        <article class="card">
+          <div class="card-head">
+            <div class="card-title">${escapeHtml(item.name || item.id)}</div>
+            <span class="badge">${escapeHtml(item.status || 'draft')}</span>
+          </div>
+          <div class="desc">${escapeHtml(item.description || '暂无说明')}</div>
+          <div class="meta">
+            <span>数据集：${escapeHtml(item.dataset_id || '-')}</span>
+            <span>更新：${escapeHtml(item.updated_at || '-')}</span>
+          </div>
+          <div class="card-actions">
+            <button class="btn-primary" type="button" data-open-edit="${escapeHtml(item.id)}">编辑</button>
+            <button class="btn-ghost" type="button" data-open-view="${escapeHtml(item.id)}">预览</button>
+          </div>
+        </article>
+      `).join('');
+      host.querySelectorAll('[data-open-edit]').forEach((btn) => {
+        btn.addEventListener('click', () => { window.location.href = `/dashboards/${encodeURIComponent(btn.dataset.openEdit)}/edit`; });
+      });
+      host.querySelectorAll('[data-open-view]').forEach((btn) => {
+        btn.addEventListener('click', () => { window.location.href = `/dashboards/${encodeURIComponent(btn.dataset.openView)}`; });
+      });
+    }
+    async function loadDashboards() {
+      const statusEl = document.getElementById('dashboardStatus');
+      statusEl.textContent = '正在加载看板…';
+      const payload = await fetchJson('/api/dashboards');
+      window.__dashboards = Array.isArray(payload.items) ? payload.items : [];
+      applyDashboardFilters();
+      statusEl.textContent = `已加载 ${window.__dashboards.length} 个看板`;
+    }
+    function applyDashboardFilters() {
+      const keyword = document.getElementById('dashboardSearchInput').value.trim().toLowerCase();
+      const status = document.getElementById('dashboardStatusFilter').value.trim();
+      const rows = (window.__dashboards || []).filter((item) => {
+        if (status && String(item.status || '') !== status) return false;
+        if (!keyword) return true;
+        const hay = [item.name, item.description, item.dataset_id].join(' ').toLowerCase();
+        return hay.includes(keyword);
+      });
+      renderDashboards(rows);
+    }
+    async function createDashboard() {
+      const datasetId = window.prompt('请输入要绑定的数据集 ID');
+      if (!datasetId) return;
+      const name = window.prompt('请输入看板名称');
+      if (!name) return;
+      const payload = await fetchJson('/api/dashboards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          dataset_id: datasetId,
+          description: '基于模板化画布创建',
+        }),
+      });
+      window.location.href = `/dashboards/${encodeURIComponent(payload.id)}/edit`;
+    }
+    document.getElementById('dashboardSearchInput').addEventListener('input', applyDashboardFilters);
+    document.getElementById('dashboardStatusFilter').addEventListener('change', applyDashboardFilters);
+    document.getElementById('newDashboardBtn').addEventListener('click', createDashboard);
+    document.getElementById('aiDraftBtn').addEventListener('click', () => window.alert('AI 生成草稿将在下一版接入，这一版先固定模板化画布。'));
+    document.getElementById('openMapBtn').addEventListener('click', () => { window.location.href = '/map'; });
+    document.getElementById('openWorkbenchBtn').addEventListener('click', () => { window.location.href = '/sql-workbench'; });
+    document.getElementById('openDatasetsBtn').addEventListener('click', () => { window.location.href = '/datasets'; });
+    loadDashboards().catch((error) => {
+      document.getElementById('dashboardStatus').textContent = error.message || '看板加载失败';
+    });
+  </script>
+</body>
+</html>

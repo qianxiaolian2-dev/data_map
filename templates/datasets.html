@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>数据集中心</title>
+  <style>
+    :root { --bg:#eef1f5; --surface:#fff; --surface-soft:#f8fafc; --ink:#111827; --muted:#6b7280; --line:#dbe2ea; --brand:#1a73e8; --ok:#0d9488; --radius:12px; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Helvetica Neue",sans-serif; font-size:13px; color:var(--ink); background:var(--bg); min-height:100vh; }
+    button,input,select,textarea { font:inherit; }
+    .page { min-height:100vh; display:grid; grid-template-rows:48px auto minmax(0,1fr); }
+    .topbar { display:flex; align-items:center; justify-content:space-between; gap:12px; background:#111827; color:#fff; padding:0 18px; }
+    .brand { display:flex; align-items:center; gap:8px; font-weight:700; }
+    .dot { width:8px; height:8px; border-radius:999px; background:#1a73e8; }
+    .topbar-actions { display:flex; align-items:center; gap:8px; }
+    .topbar-btn { height:30px; padding:0 12px; border:1px solid rgba(255,255,255,0.14); border-radius:8px; background:rgba(255,255,255,0.08); color:rgba(255,255,255,0.92); cursor:pointer; }
+    .hero { padding:18px 22px 10px; display:grid; gap:12px; }
+    .hero-title { font-size:24px; font-weight:800; }
+    .hero-sub { color:var(--muted); line-height:1.7; }
+    .hero-actions { display:flex; gap:10px; flex-wrap:wrap; }
+    .btn-primary,.btn-ghost { height:34px; padding:0 14px; border-radius:10px; cursor:pointer; }
+    .btn-primary { border:0; background:var(--brand); color:#fff; font-weight:600; }
+    .btn-ghost { border:1px solid var(--line); background:#fff; color:var(--muted); }
+    .content { padding:0 22px 22px; display:grid; gap:14px; }
+    .toolbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .toolbar input, .toolbar select { height:36px; border:1px solid var(--line); border-radius:10px; background:#fff; padding:0 12px; }
+    .toolbar input { min-width:260px; flex:1; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:14px; }
+    .card { border:1px solid var(--line); border-radius:14px; background:#fff; padding:16px; display:grid; gap:10px; box-shadow:0 8px 24px rgba(15,23,42,0.04); }
+    .card-main { display:grid; gap:10px; cursor:pointer; }
+    .card-main:hover .card-title { color:var(--brand); }
+    .card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+    .card-title { font-size:15px; font-weight:700; }
+    .badge { display:inline-flex; align-items:center; padding:2px 8px; border-radius:999px; font-size:11px; border:1px solid rgba(26,115,232,0.16); background:rgba(26,115,232,0.08); color:var(--brand); }
+    .meta { display:flex; gap:8px; flex-wrap:wrap; color:var(--muted); font-size:12px; }
+    .meta span { display:inline-flex; align-items:center; padding:2px 8px; border-radius:999px; background:var(--surface-soft); }
+    .desc { color:var(--muted); line-height:1.6; min-height:38px; }
+    .card-actions { display:flex; gap:8px; flex-wrap:wrap; padding-top:2px; }
+    .mini-btn,.mini-danger { height:30px; padding:0 12px; border-radius:9px; cursor:pointer; font-size:12px; }
+    .mini-btn { border:1px solid var(--line); background:#fff; color:var(--ink); }
+    .mini-danger { border:1px solid rgba(220,38,38,0.16); background:rgba(220,38,38,0.08); color:#dc2626; }
+    .empty { padding:28px; border:1px dashed var(--line); border-radius:14px; background:var(--surface-soft); color:var(--muted); text-align:center; }
+    .status { min-height:18px; color:var(--muted); font-size:12px; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <div class="brand"><span class="dot"></span>数据集中心</div>
+      <div class="topbar-actions">
+        <button class="topbar-btn" type="button" id="openMapBtn">数据地图</button>
+        <button class="topbar-btn" type="button" id="openWorkbenchBtn">SQL 工作台</button>
+        <button class="topbar-btn" type="button" id="openDashboardsBtn">看板</button>
+      </div>
+    </header>
+    <section class="hero">
+      <div class="hero-title">数据集</div>
+      <div class="hero-sub">把宽表或保存好的 SQL 沉淀成可复用的分析入口。第一版先支持基于表或 SQL 文件创建数据集，后续再补字段角色配置。</div>
+      <div class="hero-actions">
+        <button class="btn-primary" type="button" id="newTableDatasetBtn">新建表数据集</button>
+        <button class="btn-ghost" type="button" id="newSqlDatasetBtn">从 SQL 创建</button>
+      </div>
+    </section>
+    <main class="content">
+      <div class="toolbar">
+        <input id="datasetSearchInput" placeholder="搜索数据集名称 / 来源表 / SQL 路径" />
+        <select id="datasetStatusFilter"><option value="">全部状态</option><option value="draft">草稿</option><option value="published">已发布</option></select>
+      </div>
+      <div id="datasetStatus" class="status"></div>
+      <div id="datasetGrid" class="grid"></div>
+    </main>
+  </div>
+  <script>
+    async function fetchJson(url, options = {}) {
+      const resp = await fetch(url, options);
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.error || `请求失败(${resp.status})`);
+      return data;
+    }
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function renderDatasets(items) {
+      const host = document.getElementById('datasetGrid');
+      if (!items.length) {
+        host.innerHTML = '<div class="empty">还没有数据集。可以先从宽表或 SQL 工作台开始沉淀。</div>';
+        return;
+      }
+      host.innerHTML = items.map((item) => `
+        <article class="card">
+          <div class="card-main" data-action="open" data-id="${escapeHtml(item.id)}">
+            <div class="card-head">
+              <div class="card-title">${escapeHtml(item.name || item.id)}</div>
+              <span class="badge">${escapeHtml(item.status || 'draft')}</span>
+            </div>
+            <div class="desc">${escapeHtml(item.description || '暂无说明')}</div>
+            <div class="meta">
+              <span>来源：${escapeHtml(item.source_type || '-')}</span>
+              <span>${escapeHtml(item.source_ref || '-')}</span>
+            </div>
+            <div class="meta">
+              <span>数据源：${escapeHtml(item.datasource_key || '-')}</span>
+              <span>更新：${escapeHtml(item.updated_at || '-')}</span>
+            </div>
+          </div>
+          <div class="card-actions">
+            <button class="mini-btn" type="button" data-action="open" data-id="${escapeHtml(item.id)}">查看详情</button>
+            <button class="mini-danger" type="button" data-action="delete" data-id="${escapeHtml(item.id)}" data-name="${escapeHtml(item.name || item.id)}">删除</button>
+          </div>
+        </article>
+      `).join('');
+    }
+    async function loadDatasets() {
+      const statusEl = document.getElementById('datasetStatus');
+      statusEl.textContent = '正在加载数据集…';
+      const payload = await fetchJson('/api/datasets');
+      window.__datasets = Array.isArray(payload.items) ? payload.items : [];
+      applyDatasetFilters();
+      statusEl.textContent = `已加载 ${window.__datasets.length} 个数据集`;
+    }
+    function applyDatasetFilters() {
+      const keyword = document.getElementById('datasetSearchInput').value.trim().toLowerCase();
+      const status = document.getElementById('datasetStatusFilter').value.trim();
+      const rows = (window.__datasets || []).filter((item) => {
+        if (status && String(item.status || '') !== status) return false;
+        if (!keyword) return true;
+        const hay = [item.name, item.description, item.source_ref, item.datasource_key].join(' ').toLowerCase();
+        return hay.includes(keyword);
+      });
+      renderDatasets(rows);
+    }
+    async function createDataset(sourceType) {
+      const name = window.prompt(sourceType === 'table' ? '请输入数据集名称' : '请输入 SQL 数据集名称');
+      if (!name) return;
+      const sourceRef = window.prompt(sourceType === 'table' ? '请输入来源表，例如 public.sales_order' : '请输入 SQL 文件路径，例如 个人查询/demo.sql');
+      if (!sourceRef) return;
+      await fetchJson('/api/datasets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, source_type: sourceType, source_ref: sourceRef, datasource_key: sourceRef.split('.')[0] || '' }),
+      });
+      await loadDatasets();
+    }
+    document.getElementById('datasetSearchInput').addEventListener('input', applyDatasetFilters);
+    document.getElementById('datasetStatusFilter').addEventListener('change', applyDatasetFilters);
+    document.getElementById('datasetGrid').addEventListener('click', async (event) => {
+      const target = event.target.closest('[data-action]');
+      if (!target) return;
+      const action = target.dataset.action || '';
+      const datasetId = target.dataset.id || '';
+      if (!datasetId) return;
+      if (action === 'open') {
+        window.location.href = `/datasets/${encodeURIComponent(datasetId)}`;
+        return;
+      }
+      if (action === 'delete') {
+        const datasetName = target.dataset.name || datasetId;
+        const ok = window.confirm(`确定删除数据集“${datasetName}”吗？`);
+        if (!ok) return;
+        document.getElementById('datasetStatus').textContent = '正在删除数据集…';
+        await fetchJson(`/api/datasets/${encodeURIComponent(datasetId)}/delete`, { method: 'POST' });
+        await loadDatasets();
+      }
+    });
+    document.getElementById('newTableDatasetBtn').addEventListener('click', () => createDataset('table'));
+    document.getElementById('newSqlDatasetBtn').addEventListener('click', () => createDataset('sql'));
+    document.getElementById('openMapBtn').addEventListener('click', () => { window.location.href = '/map'; });
+    document.getElementById('openWorkbenchBtn').addEventListener('click', () => {
+      const payload = window.__dataset || {};
+      const linked = String(payload.linked_table || payload.source_ref || '').trim();
+      if (!linked || !linked.includes('.')) {
+        window.location.href = '/sql-workbench';
+        return;
+      }
+      const [schema, ...rest] = linked.split('.');
+      const table = rest.join('.');
+      const next = new URLSearchParams();
+      if (schema) next.set('schema', schema);
+      if (table) next.set('table', table);
+      window.location.href = `/sql-workbench?${next.toString()}`;
+    });
+    document.getElementById('openDashboardsBtn').addEventListener('click', () => { window.location.href = '/dashboards'; });
+    loadDatasets().catch((error) => {
+      document.getElementById('datasetStatus').textContent = error.message || '数据集加载失败';
+    });
+  </script>
+</body>
+</html>

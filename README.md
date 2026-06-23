@@ -36,7 +36,7 @@ That gives the model a narrower and more reliable interface:
 - [lineage_service.py](/Users/seer/自研项目/图数据库血缘/lineage_service.py): graph query service reused by MCP
 - [lineage_web_viewer.py](/Users/seer/自研项目/图数据库血缘/lineage_web_viewer.py): local web viewer that can auto-open a browser page
 - [data_map_web.py](/Users/seer/自研项目/图数据库血缘/data_map_web.py): data map web server and API
-- [templates/map.html](/Users/seer/自研项目/图数据库血缘/templates/map.html): data map homepage template, maintained outside Python string literals
+- [templates/](/Users/seer/自研项目/图数据库血缘/templates): web page templates maintained outside Python string literals
 - [db_connect_write_fdldb.py](/Users/seer/自研项目/图数据库血缘/fdl连接/db_connect_write_fdldb.py): MySQL connector
 
 ## Architecture
@@ -82,7 +82,15 @@ For the data map web UI:
 python3 /Users/seer/自研项目/图数据库血缘/data_map_web.py
 ```
 
-The homepage template for `/` and `/map` is loaded from `templates/map.html` first, with the Python inline template as fallback.
+The web pages are loaded from `templates/` first, with the Python inline templates as fallback. Current template files include:
+
+- `map.html`
+- `sql-workbench.html`
+- `datasets.html`
+- `dataset-detail.html`
+- `dashboards.html`
+- `dashboard-editor.html`
+- `dashboard-view.html`
 
 ## Example MCP handshake
 

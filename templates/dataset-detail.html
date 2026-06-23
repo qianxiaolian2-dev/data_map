@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>数据集详情</title>
+  <style>
+    :root { --bg:#eef1f5; --surface:#fff; --surface-soft:#f8fafc; --ink:#111827; --muted:#6b7280; --line:#dbe2ea; --brand:#1a73e8; --danger:#dc2626; --ok:#0d9488; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Helvetica Neue",sans-serif; font-size:13px; color:var(--ink); background:var(--bg); min-height:100vh; }
+    button,input,textarea,select { font:inherit; }
+    .page { min-height:100vh; display:grid; grid-template-rows:48px auto minmax(0,1fr); }
+    .topbar { display:flex; align-items:center; justify-content:space-between; gap:12px; background:#111827; color:#fff; padding:0 18px; }
+    .brand { display:flex; align-items:center; gap:8px; font-weight:700; }
+    .dot { width:8px; height:8px; border-radius:999px; background:#1a73e8; }
+    .topbar-actions { display:flex; align-items:center; gap:8px; }
+    .topbar-btn { height:30px; padding:0 12px; border:1px solid rgba(255,255,255,0.14); border-radius:8px; background:rgba(255,255,255,0.08); color:rgba(255,255,255,0.92); cursor:pointer; }
+    .hero { padding:20px 22px 12px; display:grid; gap:10px; }
+    .title { font-size:28px; font-weight:800; }
+    .sub { color:var(--muted); line-height:1.7; }
+    .meta { display:flex; gap:8px; flex-wrap:wrap; }
+    .meta span { display:inline-flex; align-items:center; padding:6px 10px; border-radius:999px; background:#fff; border:1px solid var(--line); color:var(--muted); }
+    .content { padding:0 22px 22px; display:grid; grid-template-columns:minmax(0,1.45fr) 380px; gap:14px; }
+    .stack { display:grid; gap:14px; }
+    .card { border:1px solid var(--line); border-radius:14px; background:#fff; padding:16px; display:grid; gap:12px; }
+    .card h3 { font-size:15px; }
+    .kv { display:grid; gap:10px; }
+    .kv-row { display:grid; grid-template-columns:120px minmax(0,1fr); gap:10px; align-items:start; }
+    .kv-row label { color:var(--muted); }
+    .mono { font-family:"SF Mono",ui-monospace,monospace; word-break:break-all; }
+    .field { display:grid; gap:6px; }
+    .field label { font-size:12px; color:var(--muted); }
+    .field input, .field textarea, .field select { width:100%; border:1px solid var(--line); border-radius:10px; background:#fff; padding:10px 12px; }
+    .field textarea { min-height:88px; resize:vertical; }
+    .field select { height:40px; padding:0 12px; }
+    .field-inline-actions { display:flex; gap:8px; }
+    .field-inline-actions input { flex:1; }
+    .actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .btn-primary,.btn-ghost,.btn-danger,.mini-btn { height:34px; padding:0 14px; border-radius:10px; cursor:pointer; }
+    .btn-primary { border:0; background:var(--brand); color:#fff; font-weight:600; }
+    .btn-ghost, .mini-btn { border:1px solid var(--line); background:#fff; color:var(--muted); }
+    .btn-danger { border:1px solid rgba(220,38,38,0.16); background:rgba(220,38,38,0.08); color:var(--danger); }
+    .status { min-height:18px; color:var(--muted); font-size:12px; }
+    .status.ok { color:var(--ok); }
+    .status.error { color:var(--danger); }
+    .model-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .model-hint { color:var(--muted); font-size:12px; line-height:1.6; }
+    .field-list { border:1px solid var(--line); border-radius:12px; background:var(--surface-soft); padding:10px; display:grid; gap:8px; max-height:320px; overflow:auto; }
+    .field-item { display:grid; grid-template-columns:auto minmax(0,1fr); gap:10px; align-items:start; border:1px solid rgba(148,163,184,0.18); border-radius:10px; background:#fff; padding:10px 12px; }
+    .field-item input { margin-top:2px; }
+    .field-name { font-weight:700; word-break:break-all; }
+    .field-meta { color:var(--muted); font-size:12px; line-height:1.5; }
+    .metric-list { display:grid; gap:10px; }
+    .metric-row { border:1px solid var(--line); border-radius:12px; background:var(--surface-soft); padding:10px; display:grid; gap:10px; }
+    .metric-grid { display:grid; grid-template-columns:1.1fr 0.8fr 1fr auto; gap:8px; align-items:end; }
+    .pill-list { display:flex; flex-wrap:wrap; gap:8px; }
+    .pill { display:inline-flex; align-items:center; padding:5px 10px; border-radius:999px; background:rgba(26,115,232,0.08); color:var(--brand); border:1px solid rgba(26,115,232,0.14); font-size:12px; }
+    .empty { padding:16px; border:1px dashed var(--line); border-radius:12px; background:var(--surface-soft); color:var(--muted); text-align:center; }
+    @media (max-width: 1200px) { .content { grid-template-columns:1fr; } }
+    @media (max-width: 720px) {
+      .model-grid { grid-template-columns:1fr; }
+      .metric-grid { grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <div class="brand"><span class="dot"></span>数据集详情</div>
+      <div class="topbar-actions">
+        <button class="topbar-btn" type="button" id="backDatasetsBtn">返回列表</button>
+        <button class="topbar-btn" type="button" id="openDashboardsBtn">看板</button>
+      </div>
+    </header>
+    <section class="hero">
+      <div class="title" id="datasetTitle">数据集</div>
+      <div class="sub" id="datasetDesc">用于沉淀一张分析表或一条保存 SQL，后续给看板和 AI 复用。</div>
+      <div class="meta" id="datasetMeta"></div>
+    </section>
+    <main class="content">
+      <section class="stack">
+        <section class="card">
+          <h3>数据集信息</h3>
+          <div class="kv" id="datasetInfo"></div>
+        </section>
+        <section class="card">
+          <h3>字段建模</h3>
+          <div class="model-hint">先把主表、时间字段、维度和指标沉淀成数据集，后面看板编辑器会直接复用这些配置。</div>
+          <div class="model-grid">
+            <div class="field">
+              <label>关联表</label>
+              <div class="field-inline-actions">
+                <input id="linkedTableInput" placeholder="例如 public.sales_order" />
+                <button class="btn-ghost" type="button" id="reloadColumnsBtn">读取字段</button>
+              </div>
+            </div>
+            <div class="field">
+              <label>分析粒度</label>
+              <input id="datasetGrainInput" placeholder="例如 一行一笔订单" />
+            </div>
+          </div>
+          <div class="field">
+            <label>时间字段</label>
+            <select id="timeFieldSelect"></select>
+          </div>
+          <div class="field">
+            <label>维度字段</label>
+            <div id="dimensionList" class="field-list"></div>
+          </div>
+          <div class="field">
+            <label>指标定义</label>
+            <div id="metricList" class="metric-list"></div>
+            <div class="actions">
+              <button class="btn-ghost" type="button" id="addMetricBtn">新增指标</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>建模摘要</label>
+            <div id="datasetModelSummary" class="pill-list"></div>
+          </div>
+          <div class="actions">
+            <button class="btn-primary" type="button" id="saveDatasetModelBtn">保存建模</button>
+          </div>
+          <div class="status" id="modelStatus"></div>
+        </section>
+      </section>
+      <aside class="card">
+        <h3>操作</h3>
+        <div class="field">
+          <label>名称</label>
+          <input id="datasetNameInput" />
+        </div>
+        <div class="field">
+          <label>说明</label>
+          <textarea id="datasetDescInput"></textarea>
+        </div>
+        <div class="actions">
+          <button class="btn-primary" type="button" id="createDashboardBtn">基于它建看板</button>
+          <button class="btn-ghost" type="button" id="openWorkbenchBtn">去工作台</button>
+          <button class="btn-danger" type="button" id="deleteDatasetBtn">删除数据集</button>
+        </div>
+        <div class="status" id="datasetStatus"></div>
+      </aside>
+    </main>
+  </div>
+  <script>
+    const datasetState = { dataset: null, profile: null };
+    async function fetchJson(url, options = {}) {
+      const resp = await fetch(url, options);
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.error || `请求失败(${resp.status})`);
+      return data;
+    }
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function availableColumns() {
+      return datasetState.profile?.structure?.columns || [];
+    }
+    function renderTimeFieldSelect(value = '') {
+      const select = document.getElementById('timeFieldSelect');
+      const columns = availableColumns();
+      if (!columns.length) {
+        select.innerHTML = '<option value="">先读取字段</option>';
+        return;
+      }
+      select.innerHTML = ['<option value="">不设置</option>', ...columns.map((column) => `<option value="${escapeHtml(column.column_name)}" ${column.column_name === value ? 'selected' : ''}>${escapeHtml(column.column_name)}</option>`)].join('');
+    }
+    function renderDimensionList(selectedFields = []) {
+      const host = document.getElementById('dimensionList');
+      const columns = availableColumns();
+      if (!columns.length) {
+        host.innerHTML = '<div class="empty">先读取主表字段，再配置维度。</div>';
+        return;
+      }
+      const picked = new Set(selectedFields);
+      host.innerHTML = columns.map((column) => `
+        <label class="field-item">
+          <input type="checkbox" value="${escapeHtml(column.column_name)}" ${picked.has(column.column_name) ? 'checked' : ''} />
+          <div>
+            <div class="field-name">${escapeHtml(column.column_name)}</div>
+            <div class="field-meta">${escapeHtml(column.column_comment || column.data_type || column.udt_name || '暂无说明')}</div>
+          </div>
+        </label>
+      `).join('');
+    }
+    function renderMetricList(metrics = []) {
+      const host = document.getElementById('metricList');
+      const columns = availableColumns();
+      if (!metrics.length) {
+        host.innerHTML = '<div class="empty">还没有指标。建议至少配置 1 个 KPI 指标。</div>';
+        return;
+      }
+      host.innerHTML = metrics.map((metric, index) => `
+        <div class="metric-row">
+          <div class="metric-grid">
+            <div class="field">
+              <label>字段</label>
+              <select data-metric-field>
+                <option value="">仅 count 可留空</option>
+                ${columns.map((column) => `<option value="${escapeHtml(column.column_name)}" ${column.column_name === (metric.field || '') ? 'selected' : ''}>${escapeHtml(column.column_name)}</option>`).join('')}
+              </select>
+            </div>
+            <div class="field">
+              <label>聚合</label>
+              <select data-metric-agg>
+                ${['count','count_distinct','sum','avg','max','min'].map((agg) => `<option value="${agg}" ${agg === (metric.agg || 'sum') ? 'selected' : ''}>${escapeHtml(agg)}</option>`).join('')}
+              </select>
+            </div>
+            <div class="field">
+              <label>指标名称</label>
+              <input data-metric-label value="${escapeHtml(metric.label || '')}" placeholder="例如 成交金额" />
+            </div>
+            <button class="mini-btn" type="button" data-remove-metric="${index}">删除</button>
+          </div>
+        </div>
+      `).join('');
+      host.querySelectorAll('[data-remove-metric]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const metrics = collectMetrics();
+          metrics.splice(Number(btn.dataset.removeMetric), 1);
+          renderMetricList(metrics);
+        });
+      });
+    }
+    function renderModelSummary(payload) {
+      const host = document.getElementById('datasetModelSummary');
+      const dimensions = Array.isArray(payload.dimensions) ? payload.dimensions : [];
+      const metrics = Array.isArray(payload.metrics) ? payload.metrics : [];
+      const chips = [
+        `<span class="pill">时间：${escapeHtml(payload.time_field || '未设置')}</span>`,
+        `<span class="pill">维度：${escapeHtml(dimensions.length)}</span>`,
+        `<span class="pill">指标：${escapeHtml(metrics.length)}</span>`,
+      ];
+      dimensions.slice(0, 4).forEach((item) => chips.push(`<span class="pill">${escapeHtml(item.label || item.field || '')}</span>`));
+      metrics.slice(0, 4).forEach((item) => chips.push(`<span class="pill">${escapeHtml(item.label || '')}</span>`));
+      host.innerHTML = chips.join('');
+    }
+    function renderModelEditor(payload) {
+      document.getElementById('linkedTableInput').value = payload.linked_table || payload.source_ref || '';
+      document.getElementById('datasetGrainInput').value = payload.grain || '';
+      renderTimeFieldSelect(payload.time_field || '');
+      renderDimensionList((payload.dimensions || []).map((item) => item.field || ''));
+      renderMetricList(payload.metrics || []);
+      renderModelSummary(payload);
+    }
+    function renderDataset(payload) {
+      datasetState.dataset = payload;
+      document.getElementById('datasetTitle').textContent = payload.name || payload.id || '数据集';
+      document.getElementById('datasetDesc').textContent = payload.description || '暂无说明';
+      document.getElementById('datasetNameInput').value = payload.name || '';
+      document.getElementById('datasetDescInput').value = payload.description || '';
+      document.getElementById('datasetMeta').innerHTML = [
+        `状态：${escapeHtml(payload.status || 'draft')}`,
+        `来源：${escapeHtml(payload.source_type || '-')}`,
+        `数据源：${escapeHtml(payload.datasource_key || '-')}`,
+        `更新时间：${escapeHtml(payload.updated_at || '-')}`
+      ].map((text) => `<span>${text}</span>`).join('');
+      document.getElementById('datasetInfo').innerHTML = `
+        <div class="kv-row"><label>ID</label><div class="mono">${escapeHtml(payload.id || '-')}</div></div>
+        <div class="kv-row"><label>来源类型</label><div>${escapeHtml(payload.source_type || '-')}</div></div>
+        <div class="kv-row"><label>来源引用</label><div class="mono">${escapeHtml(payload.source_ref || '-')}</div></div>
+        <div class="kv-row"><label>关联表</label><div class="mono">${escapeHtml(payload.linked_table || '-')}</div></div>
+        <div class="kv-row"><label>粒度</label><div>${escapeHtml(payload.grain || '未填写')}</div></div>
+        <div class="kv-row"><label>时间字段</label><div>${escapeHtml(payload.time_field || '未填写')}</div></div>
+        <div class="kv-row"><label>维度数</label><div>${escapeHtml((payload.dimensions || []).length)}</div></div>
+        <div class="kv-row"><label>指标数</label><div>${escapeHtml((payload.metrics || []).length)}</div></div>
+      `;
+      renderModelEditor(payload);
+    }
+    function collectDimensions() {
+      return Array.from(document.querySelectorAll('#dimensionList input[type="checkbox"]:checked')).map((input) => ({
+        field: input.value,
+        label: input.value,
+      }));
+    }
+    function collectMetrics() {
+      return Array.from(document.querySelectorAll('.metric-row')).map((row) => {
+        const field = row.querySelector('[data-metric-field]')?.value.trim() || '';
+        const agg = row.querySelector('[data-metric-agg]')?.value.trim() || 'sum';
+        const label = row.querySelector('[data-metric-label]')?.value.trim() || '';
+        return { field, agg, label: label || (field ? `${agg.toUpperCase()}_${field}` : 'COUNT') };
+      }).filter((item) => item.agg === 'count' || item.field);
+    }
+    async function loadLinkedTableProfile(qualifiedName) {
+      const statusEl = document.getElementById('modelStatus');
+      const linked = String(qualifiedName || '').trim();
+      if (!linked || !linked.includes('.')) {
+        datasetState.profile = null;
+        renderModelEditor(datasetState.dataset || {});
+        statusEl.textContent = '请先填写关联表，例如 public.sales_order';
+        statusEl.className = 'status error';
+        return;
+      }
+      const [schema, ...rest] = linked.split('.');
+      const table = rest.join('.');
+      statusEl.textContent = `正在读取 ${linked} 的字段…`;
+      statusEl.className = 'status';
+      const profile = await fetchJson(`/api/table-profile?schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(table)}&sample_limit=20`);
+      datasetState.profile = profile;
+      datasetState.dataset = {
+        ...(datasetState.dataset || {}),
+        linked_table: linked,
+        source_ref: datasetState.dataset?.source_ref || linked,
+      };
+      renderModelEditor(datasetState.dataset || {});
+      statusEl.textContent = `已读取 ${linked}，共 ${profile.structure?.column_count || 0} 个字段`;
+      statusEl.className = 'status ok';
+    }
+    async function saveDatasetModel() {
+      const payload = datasetState.dataset;
+      if (!payload?.id) return;
+      const linkedTable = document.getElementById('linkedTableInput').value.trim();
+      const body = {
+        id: payload.id,
+        name: document.getElementById('datasetNameInput').value.trim() || payload.name,
+        description: document.getElementById('datasetDescInput').value.trim(),
+        source_type: payload.source_type || 'table',
+        source_ref: linkedTable || payload.source_ref || '',
+        datasource_key: linkedTable.split('.')[0] || payload.datasource_key || '',
+        linked_table: linkedTable,
+        grain: document.getElementById('datasetGrainInput').value.trim(),
+        time_field: document.getElementById('timeFieldSelect').value.trim(),
+        dimensions: collectDimensions(),
+        metrics: collectMetrics(),
+        default_filters: payload.default_filters || [],
+        status: payload.status || 'draft',
+      };
+      const updated = await fetchJson(`/api/datasets/${encodeURIComponent(payload.id)}/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      window.__dataset = updated;
+      renderDataset(updated);
+      document.getElementById('modelStatus').textContent = '建模已保存';
+      document.getElementById('modelStatus').className = 'status ok';
+    }
+    async function loadDataset() {
+      const parts = window.location.pathname.split('/').filter(Boolean);
+      const datasetId = parts[1];
+      const payload = await fetchJson(`/api/datasets/${encodeURIComponent(datasetId)}`);
+      window.__dataset = payload;
+      renderDataset(payload);
+      const linked = payload.linked_table || (payload.source_type === 'table' ? payload.source_ref : '');
+      if (linked) {
+        try { await loadLinkedTableProfile(linked); } catch (error) {
+          document.getElementById('modelStatus').textContent = error.message || '字段读取失败';
+          document.getElementById('modelStatus').className = 'status error';
+        }
+      }
+    }
+    document.getElementById('backDatasetsBtn').addEventListener('click', () => { window.location.href = '/datasets'; });
+    document.getElementById('openDashboardsBtn').addEventListener('click', () => { window.location.href = '/dashboards'; });
+    document.getElementById('reloadColumnsBtn').addEventListener('click', async () => {
+      try { await loadLinkedTableProfile(document.getElementById('linkedTableInput').value.trim()); } catch (error) {
+        document.getElementById('modelStatus').textContent = error.message || '字段读取失败';
+        document.getElementById('modelStatus').className = 'status error';
+      }
+    });
+    document.getElementById('addMetricBtn').addEventListener('click', () => {
+      const metrics = collectMetrics();
+      metrics.push({ field: '', agg: 'sum', label: '' });
+      renderMetricList(metrics);
+    });
+    document.getElementById('saveDatasetModelBtn').addEventListener('click', () => {
+      saveDatasetModel().catch((error) => {
+        document.getElementById('modelStatus').textContent = error.message || '保存建模失败';
+        document.getElementById('modelStatus').className = 'status error';
+      });
+    });
+    document.getElementById('openWorkbenchBtn').addEventListener('click', () => {
+      const payload = window.__dataset || {};
+      const linked = String(payload.linked_table || payload.source_ref || '').trim();
+      if (!linked || !linked.includes('.')) {
+        window.location.href = '/sql-workbench';
+        return;
+      }
+      const [schema, ...rest] = linked.split('.');
+      const table = rest.join('.');
+      const next = new URLSearchParams();
+      if (schema) next.set('schema', schema);
+      if (table) next.set('table', table);
+      window.location.href = `/sql-workbench?${next.toString()}`;
+    });
+    document.getElementById('createDashboardBtn').addEventListener('click', async () => {
+      const payload = window.__dataset;
+      if (!payload) return;
+      if (!(payload.metrics || []).length) {
+        document.getElementById('datasetStatus').textContent = '请先保存至少 1 个指标，再基于它建看板';
+        document.getElementById('datasetStatus').className = 'status error';
+        return;
+      }
+      const created = await fetchJson('/api/dashboards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: `${payload.name || payload.id}_看板`,
+          dataset_id: payload.id,
+          description: '由数据集详情页创建',
+          layout_mode: 'overview',
+        }),
+      });
+      window.location.href = `/dashboards/${encodeURIComponent(created.id)}/edit`;
+    });
+    document.getElementById('deleteDatasetBtn').addEventListener('click', async () => {
+      const payload = window.__dataset;
+      if (!payload) return;
+      const ok = window.confirm(`确定删除数据集“${payload.name || payload.id}”吗？`);
+      if (!ok) return;
+      await fetchJson(`/api/datasets/${encodeURIComponent(payload.id)}/delete`, { method: 'POST' });
+      window.location.href = '/datasets';
+    });
+    loadDataset().catch((error) => {
+      document.getElementById('datasetStatus').textContent = error.message || '数据集加载失败';
+      document.getElementById('datasetStatus').className = 'status error';
+    });
+  </script>
+</body>
+</html>
