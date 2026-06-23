@@ -1,0 +1,11 @@
+{
+  "favorites": [],
+  "linked_tables": {
+    "个人查询/public_sales_order_草稿.sql": "public.sales_order",
+    "个人查询/线索.sql": "public.sales_clues"
+  },
+  "recent_files": [
+    "个人查询/public_sales_order_草稿.sql",
+    "个人查询/线索.sql"
+  ]
+}

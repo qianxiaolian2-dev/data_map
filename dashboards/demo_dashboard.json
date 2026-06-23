@@ -1,0 +1,84 @@
+{
+  "id": "demo_dashboard",
+  "name": "销售订单示例看板",
+  "description": "演示数据集绑定后的 KPI、趋势和明细预览效果。",
+  "dataset_id": "demo_dataset",
+  "status": "draft",
+  "theme": {
+    "name": "slate_blue",
+    "density": "normal",
+    "radius": 12
+  },
+  "layout": {
+    "columns": 12,
+    "row_height": 72,
+    "gap": 12
+  },
+  "global_filters": [],
+  "widgets": [
+    {
+      "id": "kpi_main",
+      "type": "kpi",
+      "title": "订单数",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "w": 3,
+        "h": 2
+      },
+      "binding": {
+        "metric_key": "count",
+        "metric": {
+          "field": "",
+          "agg": "count",
+          "label": "订单数"
+        }
+      }
+    },
+    {
+      "id": "trend_main",
+      "type": "line",
+      "title": "订单创建趋势（月）",
+      "position": {
+        "x": 0,
+        "y": 2,
+        "w": 8,
+        "h": 4
+      },
+      "binding": {
+        "metric_key": "count",
+        "metric": {
+          "field": "",
+          "agg": "count",
+          "label": "订单数"
+        },
+        "time_field": "created_at",
+        "time_grain": "month",
+        "sort_order": "asc",
+        "limit": 12
+      }
+    },
+    {
+      "id": "table_main",
+      "type": "table",
+      "title": "订单明细",
+      "position": {
+        "x": 0,
+        "y": 6,
+        "w": 12,
+        "h": 5
+      },
+      "binding": {
+        "columns": [
+          "created_at",
+          "project_number",
+          "accept_status"
+        ]
+      }
+    }
+  ],
+  "created_by": "system",
+  "created_at": "2026-06-18 02:31:17 UTC",
+  "updated_at": "2026-06-18 07:10:35 UTC",
+  "layout_mode": "overview"
+}

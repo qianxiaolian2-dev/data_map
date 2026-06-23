@@ -1,0 +1,9 @@
+.DS_Store
+.env
+__pycache__/
+*.pyc
+.playwright-mcp/
+.tmp_*
+.runtime_*
+*.bak.*
+datamap-8780.png

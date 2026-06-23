@@ -1,0 +1,102 @@
+{
+  "favorites": {},
+  "table_meta": {},
+  "usage": {
+    "dwd_mdbase.base_customer": {
+      "last_viewed_at": "2026-06-17 09:19:34 UTC",
+      "view_count": 14
+    },
+    "dwd_mdbase.sales_contract": {
+      "last_viewed_at": "2026-06-17 09:19:33 UTC",
+      "view_count": 17
+    },
+    "dwd_mdbase.sales_contract_detail": {
+      "last_viewed_at": "2026-06-17 09:19:34 UTC",
+      "view_count": 10
+    },
+    "dwd_mdbase.sales_opportunity_management": {
+      "last_viewed_at": "2026-06-15 07:54:21 UTC",
+      "view_count": 6
+    },
+    "dwd_mdbase.sales_order": {
+      "last_viewed_at": "2026-06-15 05:19:50 UTC",
+      "view_count": 4
+    },
+    "ods_jiandaoyun.annual_clue_target": {
+      "last_viewed_at": "2026-06-15 07:28:09 UTC",
+      "view_count": 1
+    },
+    "ods_jiandaoyun.sales_opportunity_management": {
+      "last_viewed_at": "2026-06-15 09:44:32 UTC",
+      "view_count": 5
+    },
+    "ods_jiandaoyun.sales_opportunity_product_link_details": {
+      "last_viewed_at": "2026-06-17 06:29:56 UTC",
+      "view_count": 2
+    },
+    "public.auth_tenant": {
+      "last_viewed_at": "2026-06-11 07:01:34 UTC",
+      "view_count": 1
+    },
+    "public.auth_user": {
+      "last_viewed_at": "2026-06-16 06:48:24 UTC",
+      "view_count": 66
+    },
+    "public.base_customer": {
+      "last_viewed_at": "2026-06-17 09:09:41 UTC",
+      "view_count": 27
+    },
+    "public.crm_clue_allocation_audit": {
+      "last_viewed_at": "2026-06-11 07:09:38 UTC",
+      "view_count": 2
+    },
+    "public.crm_customer": {
+      "last_viewed_at": "2026-06-17 09:09:41 UTC",
+      "view_count": 12
+    },
+    "public.crm_customer_recycle_rule": {
+      "last_viewed_at": "2026-06-15 06:12:50 UTC",
+      "view_count": 1
+    },
+    "public.crm_customer_recycle_rule_action": {
+      "last_viewed_at": "2026-06-15 06:12:43 UTC",
+      "view_count": 1
+    },
+    "public.crm_customer_recycle_rule_category": {
+      "last_viewed_at": "2026-06-15 06:12:48 UTC",
+      "view_count": 1
+    },
+    "public.crm_customer_relation": {
+      "last_viewed_at": "2026-06-15 06:12:53 UTC",
+      "view_count": 1
+    },
+    "public.crm_customer_responsibility_cycle": {
+      "last_viewed_at": "2026-06-15 06:12:55 UTC",
+      "view_count": 1
+    },
+    "public.crm_sales_clue": {
+      "last_viewed_at": "2026-06-15 07:26:02 UTC",
+      "view_count": 12
+    },
+    "public.crm_sales_opportunity": {
+      "last_viewed_at": "2026-06-17 06:29:56 UTC",
+      "view_count": 6
+    },
+    "public.sales_clue": {
+      "last_viewed_at": "2026-06-23 01:31:49 UTC",
+      "view_count": 43
+    },
+    "public.sales_ledger": {
+      "last_viewed_at": "2026-06-23 01:32:20 UTC",
+      "view_count": 1
+    },
+    "public.sales_order": {
+      "last_viewed_at": "2026-06-22 09:43:57 UTC",
+      "view_count": 243
+    },
+    "public.sales_wide_receivable_list_history": {
+      "last_viewed_at": "2026-06-15 07:23:49 UTC",
+      "view_count": 13
+    }
+  }
+}

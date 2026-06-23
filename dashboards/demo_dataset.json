@@ -1,0 +1,67 @@
+{
+  "id": "demo_dataset",
+  "name": "demo_dataset_看板",
+  "description": "由数据集详情页创建",
+  "dataset_id": "demo_dataset",
+  "status": "draft",
+  "theme": {
+    "name": "slate_blue",
+    "density": "normal",
+    "radius": 12
+  },
+  "layout": {
+    "columns": 12,
+    "row_height": 72,
+    "gap": 12
+  },
+  "global_filters": [],
+  "widgets": [
+    {
+      "id": "kpi_1",
+      "type": "kpi",
+      "title": "核心指标 1",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "w": 3,
+        "h": 2
+      }
+    },
+    {
+      "id": "kpi_2",
+      "type": "kpi",
+      "title": "核心指标 2",
+      "position": {
+        "x": 3,
+        "y": 0,
+        "w": 3,
+        "h": 2
+      }
+    },
+    {
+      "id": "kpi_3",
+      "type": "kpi",
+      "title": "核心指标 3",
+      "position": {
+        "x": 6,
+        "y": 0,
+        "w": 3,
+        "h": 2
+      }
+    },
+    {
+      "id": "kpi_4",
+      "type": "kpi",
+      "title": "核心指标 4",
+      "position": {
+        "x": 9,
+        "y": 0,
+        "w": 3,
+        "h": 2
+      }
+    }
+  ],
+  "created_by": "system",
+  "created_at": "2026-06-18 06:14:11 UTC",
+  "updated_at": "2026-06-18 06:14:11 UTC"
+}

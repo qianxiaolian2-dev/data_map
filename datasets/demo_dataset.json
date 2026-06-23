@@ -1,0 +1,47 @@
+{
+  "id": "demo_dataset",
+  "name": "销售订单示例数据集",
+  "description": "基于 public.sales_order 的演示数据集，用于验证数据集建模到看板预览的闭环。",
+  "source_type": "table",
+  "source_ref": "public.sales_order",
+  "datasource_key": "public",
+  "linked_table": "public.sales_order",
+  "grain": "一行一笔销售订单",
+  "time_field": "created_at",
+  "dimensions": [
+    {
+      "field": "project_number",
+      "label": "项目编号",
+      "group": ""
+    },
+    {
+      "field": "accept_status",
+      "label": "验收状态",
+      "group": ""
+    },
+    {
+      "field": "accept_condition",
+      "label": "验收条件",
+      "group": ""
+    }
+  ],
+  "metrics": [
+    {
+      "field": "",
+      "agg": "count",
+      "label": "订单数",
+      "format": ""
+    },
+    {
+      "field": "project_number",
+      "agg": "count_distinct",
+      "label": "项目数",
+      "format": ""
+    }
+  ],
+  "default_filters": [],
+  "status": "draft",
+  "created_by": "system",
+  "created_at": "2026-06-18 02:31:17 UTC",
+  "updated_at": "2026-06-18 06:58:00 UTC"
+}
